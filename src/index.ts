@@ -8,8 +8,11 @@ import { CaddyInstant } from './caddy'
 
 let config: ResolvedConfig
 
+let caddy: CaddyInstant
+
 export const unpluginFactory: UnpluginFactory<Options> = options => ({
   name: 'unplugin-https-reverse-proxy',
+  enforce: 'post',
   vite: {
     configResolved(_config) {
       config = _config
@@ -62,19 +65,33 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       console.log('please provide target')
       return
     }
-    const source = `${compiler.options.devServer?.host || '127.0.0.1'}:${compiler.options.devServer?.port || '8080'}`
-
     try {
-      const caddy = new CaddyInstant()
+      // @ts-expect-error vuecli
+      const devServer = compiler.options.devServer || process.VUE_CLI_SERVICE.projectOptions.devServer
+      const source = `${devServer?.host || '127.0.0.1'}:${devServer?.port || '8080'}`
+
+      if (caddy)
+        return
+
+      caddy = new CaddyInstant()
+
       caddy.run(source, target).then((stop) => {
         const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
-        // eslint-disable-next-line no-console
-        console.log(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}`)}`)
+
+        compiler.hooks.done.tap('unplugin-https-reverse-proxy', (stats) => {
+          if (stats.hasErrors())
+            return
+
+          // eslint-disable-next-line no-console
+          console.log(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}`)}`)
+        })
 
         process.on('SIGINT', async () => {
           await stop()
           process.exit()
         })
+      }).catch((e) => {
+        throw e
       })
     }
     catch (e) {

@@ -80,6 +80,7 @@ module.exports = {
 ```bash
 # macOS
 sudo -E npm run dev # your dev script
+#    ^ `-E` is important
 
 # windows
 # use powershell as administrator
