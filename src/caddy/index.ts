@@ -64,7 +64,7 @@ function testCaddy() {
     if (!existsSync(caddyPath))
       return resolve(false)
     chmodSync(caddyPath, 0o755)
-    const child = spawn('sudo', [caddyPath])
+    const child = process.platform === 'win32' ? spawn(caddyPath, []) : spawn('sudo', [caddyPath])
     child.on('error', (err) => {
       reject(err)
     })
@@ -167,10 +167,14 @@ export class CaddyInstant {
 
     if (await tryPort(443))
       await kill(443, 'tcp')
+    if (await tryPort(80))
+      await kill(80, 'tcp')
 
     return new Promise<() => Promise<void>>((resolve, reject) => {
       // caddy reverse-proxy --from target --to source --internal-certs
-      const child = spawn('sudo', [caddyPath, 'reverse-proxy', '--from', `${target.split(':')[0]}`, '--to', `${source}`, '--internal-certs'])
+      const child = process.platform !== 'win32'
+        ? spawn('sudo', [caddyPath, 'reverse-proxy', '--from', `${target.split(':')[0]}`, '--to', `${source}`, '--internal-certs'])
+        : spawn(caddyPath, ['reverse-proxy', '--from', `${target.split(':')[0]}`, '--to', `${source}`, '--internal-certs'])
 
       child.on('error', (err) => {
         return reject(err)

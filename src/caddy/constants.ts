@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 
 const TEMP_DIR = process.env.TEMP || process.env.TMPDIR || '/tmp'
-export const caddyPath = join(TEMP_DIR, 'caddy')
+export const caddyPath = join(TEMP_DIR, `caddy${process.platform === 'win32' ? '.exe' : ''}`)
 export const caddyFilePath = join(TEMP_DIR, 'CADDYFILE')
 
 export const supportList = [
