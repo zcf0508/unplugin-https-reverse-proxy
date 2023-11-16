@@ -7,6 +7,7 @@ import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import * as hostile from 'hostile'
 import kill from 'kill-port'
+import { consola } from '../utils'
 import { caddyPath, supportList } from './constants'
 import { tryPort } from './utils'
 
@@ -53,7 +54,7 @@ export async function download() {
       chmodSync(caddyPath, 0o755)
       resolve(caddyPath)
     }).on('error', (err) => {
-      // console.log(err)
+      // consola.error(err)
       reject(err)
     })
   })
@@ -191,19 +192,17 @@ export class CaddyInstant {
       })
 
       child.stdout.on('data', (_data) => {
-        // eslint-disable-next-line no-console
-        console.log(_data.toString())
+        consola.info(_data.toString())
         resolve(async () => {
           if (!restore)
             return
 
-          if (await this.restoreHost(source.split(':')[0], target.split(':')[0])) {
-            // eslint-disable-next-line no-console
-            console.log('restore host success\n')
-          }
-          else {
-            console.error('restore host failed\n')
-          }
+          if (await this.restoreHost(source.split(':')[0], target.split(':')[0]))
+            consola.success('restore host success\n')
+
+          else
+            consola.fail('restore host failed\n')
+
           child.kill()
         })
       })

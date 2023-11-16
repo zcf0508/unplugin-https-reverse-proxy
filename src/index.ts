@@ -3,6 +3,7 @@ import type { UnpluginFactory } from 'unplugin'
 import { createUnplugin } from 'unplugin'
 import type { ResolvedConfig } from 'vite'
 import c from 'picocolors'
+import { consola } from './utils'
 import type { Options } from './types'
 import { CaddyInstant } from './caddy'
 
@@ -22,8 +23,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         target = '',
       } = options
       if (!target) {
-        // eslint-disable-next-line no-console
-        console.log('please provide target')
+        consola.fail('please provide target')
         return
       }
       server.printUrls = () => {
@@ -40,8 +40,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
             base,
           }).then((stop) => {
             const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
-            // eslint-disable-next-line no-console
-            console.log(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}${base}`)}`)
+            consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}${base}`)}`)
 
             process.on('SIGINT', async () => {
               await stop()
@@ -51,7 +50,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
           })
         }
         catch (e) {
-          console.error(e)
+          consola.error(e)
         }
       }
     },
@@ -61,8 +60,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       target = '',
     } = options
     if (!target) {
-      // eslint-disable-next-line no-console
-      console.log('please provide target')
+      consola.fail('please provide target')
       return
     }
     try {
@@ -82,8 +80,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
           if (stats.hasErrors())
             return
 
-          // eslint-disable-next-line no-console
-          console.log(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}`)}`)
+          consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}`)}`)
         })
 
         process.on('SIGINT', async () => {
@@ -95,7 +92,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       })
     }
     catch (e) {
-      console.error(e)
+      consola.error(e)
     }
   },
 })

@@ -1,4 +1,5 @@
 import { existsSync, unlinkSync } from 'node:fs'
+import { consola } from '../src/utils'
 import { download } from '../src/caddy'
 import { caddyPath } from '../src/caddy/constants'
 
@@ -8,7 +9,7 @@ async function run() {
     await download()
   }
   catch (e: any) {
-    console.log(e.code)
+    consola.error(e.code)
   }
 }
 

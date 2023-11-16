@@ -19,7 +19,6 @@ export function tryPort(port: number) {
       })
     }
     catch (e) {
-      // console.log(e)
       resolve(true)
     }
   })
