@@ -10,6 +10,12 @@ A plugin for https reverse proxy, support `vite` and `webpack`.
 npm i unplugin-https-reverse-proxy
 ```
 
+```ts
+interface Options {
+  target: string // <- https target hostname
+}
+```
+
 <details>
 <summary>Vite</summary><br>
 
@@ -40,6 +46,7 @@ module.exports = {
       // ↓ for HMR
       webSocketURL: {
         protocol: 'wss',
+        hostname: 'xxx', // <- target hostname
         port: 443,
       },
     },
@@ -79,6 +86,7 @@ module.exports = {
       // ↓ for HMR
       webSocketURL: {
         protocol: 'wss',
+        hostname: 'xxx', // <- target hostname
         port: 443,
       },
     },
