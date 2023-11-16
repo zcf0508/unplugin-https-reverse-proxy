@@ -187,12 +187,16 @@ export class CaddyInstant {
       })
 
       child.stderr.on('data', (data) => {
-        // caddy log
-        // eslint-disable-next-line no-console
-        showCaddyLog && console.info(data.toString())
-        if ((data.toString() as string).includes('Error')) {
-          child.kill()
-          return reject(data.toString())
+        const lines = (data.toString() as string).split('\n').map(line => line.trim())
+        for (const line of lines) {
+          // caddy log
+          // eslint-disable-next-line no-console
+          showCaddyLog && line && console.info(line)
+          if (line && JSON.parse(line).level === 'error') {
+            consola.error(line)
+            // child.kill()
+            return reject(line)
+          }
         }
       })
 
