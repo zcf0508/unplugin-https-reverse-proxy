@@ -65,11 +65,14 @@ function testCaddy() {
       return resolve(false)
     chmodSync(caddyPath, 0o755)
     const child = process.platform === 'win32' ? spawn(caddyPath, []) : spawn('sudo', [caddyPath])
+    child.on('close', () => {
+      return resolve(true)
+    })
     child.on('error', (err) => {
-      reject(err)
+      return reject(err)
     })
     child.stdout.on('data', (_data) => {
-      resolve(true)
+      return resolve(true)
     })
   })
 }
@@ -167,7 +170,7 @@ export class CaddyInstant {
 
     if (await tryPort(443))
       await kill(443, 'tcp')
-    if (await tryPort(80))
+    if (process.platform === 'win32' && await tryPort(80))
       await kill(80, 'tcp')
 
     return new Promise<() => Promise<void>>((resolve, reject) => {
@@ -188,7 +191,8 @@ export class CaddyInstant {
       })
 
       child.stdout.on('data', (_data) => {
-        // console.log(_data.toString())
+        // eslint-disable-next-line no-console
+        console.log(_data.toString())
         resolve(async () => {
           if (!restore)
             return
