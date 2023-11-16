@@ -7,7 +7,11 @@ A plugin for https reverse proxy, support `vite` and `webpack`.
 ## Install
 
 ```bash
-npm i unplugin-https-reverse-proxy
+# not auto install caddy when postinstall
+npm i unplugin-https-reverse-proxy --save-dev
+
+# auto install
+UHRP_AUTO_INSTALL_CADDY=true npm i unplugin-https-reverse-proxy --save-dev
 ```
 
 ```ts
