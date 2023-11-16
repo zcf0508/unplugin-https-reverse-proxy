@@ -17,6 +17,7 @@ UHRP_AUTO_INSTALL_CADDY=true npm i unplugin-https-reverse-proxy --save-dev
 ```ts
 interface Options {
   target: string // <- https target hostname
+  showCaddyLog?: boolean // <- default: false
 }
 ```
 
@@ -116,3 +117,9 @@ sudo -E npm run dev # your dev script
 # use powershell as administrator
 npm run dev # your dev script
 ```
+
+If your broswer shows a not trusted certificate warning, please check the keychain.
+
+![keychain](https://github.com/zcf0508/unplugin-https-reverse-proxy/blob/main/images/Snipaste_2023-11-16_16-59-55.png)
+
+More info, you can check [caddy about CA Root](https://caddyserver.com/docs/automatic-https#ca-root).
