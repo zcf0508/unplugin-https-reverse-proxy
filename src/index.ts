@@ -26,7 +26,9 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         consola.fail('please provide target')
         return
       }
+      const _printUrls = server.printUrls
       server.printUrls = () => {
+        _printUrls()
         let source = `localhost:${config.server.port}`
         const url = server.resolvedUrls?.local[0]
         if (url) {
