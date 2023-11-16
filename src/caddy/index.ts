@@ -67,7 +67,7 @@ function testCaddy() {
     chmodSync(caddyPath, 0o755)
     const child = process.platform === 'win32' ? spawn(caddyPath, []) : spawn('sudo', [caddyPath])
     child.on('close', () => {
-      return resolve(true)
+      return resolve(false)
     })
     child.on('error', (err) => {
       return reject(err)
