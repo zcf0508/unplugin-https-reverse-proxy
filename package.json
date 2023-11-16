@@ -73,7 +73,7 @@
     "dist"
   ],
   "scripts": {
-    "postinstall": "esno scripts/postinstall.ts",
+    "postinstall": "node dist/scripts/postinstall.js",
     "build": "tsup",
     "dev": "tsup --watch src",
     "build:fix": "esno scripts/postbuild.ts",
