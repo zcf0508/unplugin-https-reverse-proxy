@@ -71,6 +71,7 @@
   },
   "files": [
     "dist",
+    "scripts/postinstall.ts",
     "src"
   ],
   "scripts": {
