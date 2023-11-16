@@ -35,6 +35,15 @@ Example: [`playground/`](./playground/)
 // webpack.config.js
 module.exports = {
   /* ... */
+  devServer: {
+    client: {
+      // ↓ for HMR
+      webSocketURL: {
+        protocol: 'wss',
+        port: 443,
+      },
+    },
+  },
   plugins: [
     require('unplugin-https-reverse-proxy/webpack')({ /* options */ })
   ]
@@ -65,6 +74,15 @@ export default defineNuxtConfig({
 ```ts
 // vue.config.js
 module.exports = {
+  devServer: {
+    client: {
+      // ↓ for HMR
+      webSocketURL: {
+        protocol: 'wss',
+        port: 443,
+      },
+    },
+  },
   configureWebpack: {
     plugins: [
       require('unplugin-https-reverse-proxy/webpack')({ /* options */ }),
