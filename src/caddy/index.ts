@@ -81,6 +81,7 @@ function testCaddy() {
 interface RunOptions {
   restore: boolean
   base: string
+  showCaddyLog: boolean
 }
 
 export class CaddyInstant {
@@ -161,6 +162,7 @@ export class CaddyInstant {
     const {
       restore = true,
       base = '/',
+      showCaddyLog = false,
     } = options || {}
 
     if (!this.inited)
@@ -185,6 +187,9 @@ export class CaddyInstant {
       })
 
       child.stderr.on('data', (data) => {
+        // caddy log
+        // eslint-disable-next-line no-console
+        showCaddyLog && console.info(data.toString())
         if ((data.toString() as string).includes('Error')) {
           child.kill()
           return reject(data.toString())

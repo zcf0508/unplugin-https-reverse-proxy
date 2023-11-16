@@ -7,6 +7,7 @@ export default defineConfig({
     Inspect(),
     Unplugin({
       target: 'test.abc.com',
+      showCaddyLog: true,
     }),
   ],
 })
