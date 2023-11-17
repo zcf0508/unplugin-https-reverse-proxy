@@ -11,9 +11,45 @@ let config: ResolvedConfig
 
 let caddy: CaddyInstant
 
+function registerExit(clear: (() => Promise<any>) | (() => any)) {
+  process.on('beforeExit', async (_code) => {
+    await clear()
+  })
+
+  process.on('uncaughtException', async (err) => {
+    console.error('An uncaught error occurred!', err.stack)
+    await clear()
+    process.nextTick(() => {
+      process.exit(1)
+    })
+  })
+
+  process.on('unhandledRejection', async (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+    await clear()
+    process.nextTick(() => {
+      process.exit(1)
+    })
+  })
+
+  process.on('SIGINT', async () => {
+    await clear()
+    process.nextTick(() => {
+      process.exit()
+    })
+  })
+
+  process.on('SIGTERM', async () => {
+    await clear()
+    process.nextTick(() => {
+      process.exit()
+    })
+  })
+}
+
 export const unpluginFactory: UnpluginFactory<Options> = options => ({
   name: 'unplugin-https-reverse-proxy',
-  enforce: 'post',
+  enforce: 'pre',
   vite: {
     configResolved(_config) {
       config = _config
@@ -29,6 +65,20 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         consola.fail('please provide target')
         return
       }
+
+      let _stop: () => Promise<any>
+      const _servce = server
+
+      registerExit(async () => {
+        try {
+          _stop && await _stop()
+          _servce && _servce.close()
+        }
+        catch (e) {
+          consola.error(e)
+        }
+      })
+
       const _printUrls = server.printUrls
       server.printUrls = () => {
         _printUrls()
@@ -40,19 +90,16 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         }
         const base = server.config.base || '/'
         try {
-          const caddy = new CaddyInstant()
+          if (caddy)
+            return
+          caddy = new CaddyInstant()
           caddy.run(source, target, {
             base,
             showCaddyLog: options.showCaddyLog,
           }).then((stop) => {
+            _stop = stop
             const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
             consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}${base}`)}`)
-
-            process.on('SIGINT', async () => {
-              await stop()
-              server.close()
-              process.exit()
-            })
           }).catch((e) => {
             throw e
           })
@@ -74,6 +121,18 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       consola.fail('please provide target')
       return
     }
+
+    let _stop: () => Promise<any>
+
+    registerExit(async () => {
+      try {
+        _stop && await _stop()
+      }
+      catch (e) {
+        consola.error(e)
+      }
+    })
+
     try {
       // @ts-expect-error vuecli
       const devServer = compiler.options.devServer || process.VUE_CLI_SERVICE.projectOptions.devServer
@@ -87,6 +146,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       caddy.run(source, target, {
         showCaddyLog: options.showCaddyLog,
       }).then((stop) => {
+        _stop = stop
         const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
 
         compiler.hooks.done.tap('unplugin-https-reverse-proxy', (stats) => {
@@ -94,11 +154,6 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
             return
 
           consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}`)}`)
-        })
-
-        process.on('SIGINT', async () => {
-          await stop()
-          process.exit()
         })
       }).catch((e) => {
         throw e
