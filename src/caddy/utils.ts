@@ -1,5 +1,6 @@
 import { createServer } from 'node:net'
 import ora from 'ora'
+import { consola } from '../utils'
 
 let spinner: ora.Ora
 
@@ -38,6 +39,7 @@ function getNumber(number: number) {
 
 export function logProgress(percent: number | string) {
   if (!spinner) {
+    consola.log('')
     spinner = ora({
       text: 'Start Download Caddy: 0%',
       indent: 2,
