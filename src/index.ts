@@ -20,8 +20,11 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     },
     configureServer(server) {
       const {
+        enable = true,
         target = '',
       } = options
+      if (!enable)
+        return
       if (!target) {
         consola.fail('please provide target')
         return
@@ -62,8 +65,11 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
   },
   webpack(compiler) {
     const {
+      enable = true,
       target = '',
     } = options
+    if (!enable)
+      return
     if (!target) {
       consola.fail('please provide target')
       return

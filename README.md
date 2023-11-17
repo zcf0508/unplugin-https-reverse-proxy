@@ -16,6 +16,7 @@ UHRP_AUTO_INSTALL_CADDY=true npm i unplugin-https-reverse-proxy --save-dev
 
 ```ts
 interface Options {
+  enable?: boolean // <- default: true
   target: string // <- https target hostname
   showCaddyLog?: boolean // <- default: false
 }
@@ -26,11 +27,11 @@ interface Options {
 
 ```ts
 // vite.config.ts
-import Starter from 'unplugin-https-reverse-proxy/vite'
+import HttpsReverseProxy from 'unplugin-https-reverse-proxy/vite'
 
 export default defineConfig({
   plugins: [
-    Starter({ /* options */ }),
+    HttpsReverseProxy({ /* options */ }),
   ],
 })
 ```
