@@ -122,6 +122,7 @@
     "http-proxy-agent": "^7.0.0",
     "https-proxy-agent": "^7.0.2",
     "kill-port": "^2.0.1",
+    "ora": "5",
     "picocolors": "^1.0.0",
     "unplugin": "^1.4.0"
   },
