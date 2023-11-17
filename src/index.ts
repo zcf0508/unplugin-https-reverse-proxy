@@ -50,6 +50,8 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
               server.close()
               process.exit()
             })
+          }).catch((e) => {
+            throw e
           })
         }
         catch (e) {

@@ -192,7 +192,7 @@ export class CaddyInstant {
           // caddy log
           // eslint-disable-next-line no-console
           showCaddyLog && line && console.info(line)
-          if (line && JSON.parse(line).level === 'error') {
+          if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
             consola.error(line)
             // child.kill()
             return reject(line)
