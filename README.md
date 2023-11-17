@@ -56,6 +56,7 @@ module.exports = {
         port: 443,
       },
     },
+    setupExitSignals: true,
   },
   plugins: [
     require('unplugin-https-reverse-proxy/webpack')({ /* options */ })
@@ -96,6 +97,7 @@ module.exports = {
         port: 443,
       },
     },
+    setupExitSignals: true,
   },
   configureWebpack: {
     plugins: [

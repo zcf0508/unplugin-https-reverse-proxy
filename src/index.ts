@@ -1,15 +1,18 @@
 import process from 'node:process'
 import type { UnpluginFactory } from 'unplugin'
 import { createUnplugin } from 'unplugin'
-import type { ResolvedConfig } from 'vite'
+import type { ResolvedConfig, ViteDevServer } from 'vite'
 import c from 'picocolors'
-import { consola } from './utils'
+import { consola, once } from './utils'
 import type { Options } from './types'
 import { CaddyInstant } from './caddy'
 
 let config: ResolvedConfig
 
 let caddy: CaddyInstant
+
+let _stop: (callback?: () => any) => Promise<any>
+let _servce: ViteDevServer
 
 function registerExit(clear: (() => Promise<any>) | (() => any)) {
   process.on('beforeExit', async (_code) => {
@@ -32,18 +35,14 @@ function registerExit(clear: (() => Promise<any>) | (() => any)) {
     })
   })
 
-  process.on('SIGINT', async () => {
+  process.once('SIGINT', async () => {
     await clear()
-    process.nextTick(() => {
-      process.exit()
-    })
+    process.emit('SIGINT')
   })
 
-  process.on('SIGTERM', async () => {
+  process.once('SIGTERM', async () => {
     await clear()
-    process.nextTick(() => {
-      process.exit()
-    })
+    process.emit('SIGTERM')
   })
 }
 
@@ -53,6 +52,18 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
   vite: {
     configResolved(_config) {
       config = _config
+      registerExit(async () => {
+        try {
+          _servce && _servce.close()
+          _servce.httpServer?.close(async () => {
+            _stop && await _stop()
+          })
+          _stop && await _stop()
+        }
+        catch (e) {
+          consola.error(e)
+        }
+      })
     },
     configureServer(server) {
       const {
@@ -66,18 +77,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         return
       }
 
-      let _stop: () => Promise<any>
-      const _servce = server
-
-      registerExit(async () => {
-        try {
-          _stop && await _stop()
-          _servce && _servce.close()
-        }
-        catch (e) {
-          consola.error(e)
-        }
-      })
+      _servce = server
 
       const _printUrls = server.printUrls
       server.printUrls = () => {
@@ -97,9 +97,9 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
             base,
             showCaddyLog: options.showCaddyLog,
           }).then((stop) => {
-            _stop = stop
             const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
             consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}${base}`)}`)
+            !_stop && (_stop = once(stop))
           }).catch((e) => {
             throw e
           })
@@ -108,6 +108,10 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
           consola.error(e)
         }
       }
+    },
+    async buildEnd() {
+      // https://github.com/vitejs/vite/commit/4338d7d6f32c8e0e67ff58f0cb8c1a9120294756#diff-c0b6eb176448702b6325d2e1b2567c5ccf969f03eef1242950e0bfb18877022fR580
+      _stop && await _stop()
     },
   },
   webpack(compiler) {
@@ -122,38 +126,53 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       return
     }
 
-    let _stop: () => Promise<any>
-
-    registerExit(async () => {
-      try {
-        _stop && await _stop()
-      }
-      catch (e) {
-        consola.error(e)
-      }
-    })
-
     try {
-      // @ts-expect-error vuecli
-      const devServer = compiler.options.devServer || process.VUE_CLI_SERVICE.projectOptions.devServer
-      const source = `${devServer?.host || '127.0.0.1'}:${devServer?.port || '8080'}`
+      registerExit(async () => {
+        try {
+          _stop && await _stop()
+        }
+        catch (e) {
+          consola.error(e)
+        }
+      })
+
+      const devServer = {
+        host: '127.0.0.1',
+        port: 8080,
+        ...compiler.options.devServer,
+        // @ts-expect-error vuecli
+        ...process.VUE_CLI_SERVICE.projectOptions.devServer,
+      }
+      const source = `${devServer.host}:${devServer.port}`
 
       if (caddy)
         return
+
+      // https://github.com/webpack/webpack-dev-server/blob/master/lib/Server.js#L1913
+      const _close = compiler.close.bind(compiler)
+      compiler.close = async (callback: Parameters<typeof _close>[0]) => {
+        try {
+          _stop && await _stop(() => {
+            _close && _close(callback)
+          })
+        }
+        catch (e) {
+          consola.error(e)
+          process.exit(1)
+        }
+      }
 
       caddy = new CaddyInstant()
 
       caddy.run(source, target, {
         showCaddyLog: options.showCaddyLog,
       }).then((stop) => {
-        _stop = stop
         const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
 
-        compiler.hooks.done.tap('unplugin-https-reverse-proxy', (stats) => {
-          if (stats.hasErrors())
-            return
-
+        compiler.hooks.done.tap('unplugin-https-reverse-proxy', () => {
           consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}`)}`)
+
+          !_stop && (_stop = once(stop))
         })
       }).catch((e) => {
         throw e

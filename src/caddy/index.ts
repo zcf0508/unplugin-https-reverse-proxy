@@ -5,11 +5,15 @@ import { spawn } from 'node:child_process'
 import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
-import * as hostile from 'hostile'
+
+// @ts-expect-error no type
+import _Hosts from 'hosts-so-easy'
 import kill from 'kill-port'
 import { consola } from '../utils'
 import { caddyPath, supportList } from './constants'
 import { logProgress, logProgressOver, tryPort } from './utils'
+
+const Hosts = _Hosts.default || _Hosts
 
 export async function download() {
   if (await testCaddy())
@@ -68,7 +72,7 @@ function testCaddy() {
     if (!existsSync(caddyPath))
       return resolve(false)
     chmodSync(caddyPath, 0o755)
-    const child = process.platform === 'win32' ? spawn(caddyPath, []) : spawn('sudo', [caddyPath])
+    const child = process.platform === 'win32' ? spawn(caddyPath, []) : spawn('sudo', ['-E', caddyPath])
     child.on('close', () => {
       return resolve(false)
     })
@@ -89,8 +93,11 @@ interface RunOptions {
 
 export class CaddyInstant {
   private inited = false
+  private stoped = false
+  private host: typeof Hosts
 
   constructor() {
+    this.host = new Hosts()
     testCaddy().then(() => {
       this.inited = true
     })
@@ -101,57 +108,49 @@ export class CaddyInstant {
     this.inited = true
   }
 
-  private async updateHost(ip: string, host: string) {
+  private updateHost(ip: string, host: string) {
     ['localhost', '0.0.0.0'].includes(ip) && (ip = '127.0.0.1')
+    this.host.add(ip, host)
     return new Promise<boolean>((resolve, reject) => {
-      hostile.set(ip, host, (err) => {
-        if (err) {
-          return reject(err)
-        }
-        else {
-          if (process.platform === 'win32') {
-            spawn('ipconfig', ['/flushdns']).on('error', (err) => {
-              return reject(err)
-            }).on('close', () => {
-              resolve(true)
-            })
-          }
-          else {
-            spawn('sudo', ['killall', '-HUP', 'mDNSResponder']).on('error', (err) => {
-              return reject(err)
-            }).on('close', () => {
-              resolve(true)
-            })
-          }
-        }
-      })
+      if (process.platform === 'win32') {
+        spawn('ipconfig', ['/flushdns']).on('error', (err) => {
+          consola.error(err)
+          return resolve(false)
+        }).on('close', () => {
+          resolve(true)
+        })
+      }
+      else {
+        spawn('sudo', ['-E', 'killall', '-HUP', 'mDNSResponder']).on('error', (err) => {
+          consola.error(err)
+          return resolve(false)
+        }).on('close', () => {
+          resolve(true)
+        })
+      }
     })
   }
 
-  private async restoreHost(ip: string, host: string) {
+  private restoreHost(ip: string, host: string) {
     ['localhost', '0.0.0.0'].includes(ip) && (ip = '127.0.0.1')
+    this.host.remove(ip, host)
     return new Promise<boolean>((resolve, reject) => {
-      hostile.remove(ip, host, (err) => {
-        if (err) {
-          return reject(err)
-        }
-        else {
-          if (process.platform === 'win32') {
-            spawn('ipconfig', ['/flushdns']).on('error', (err) => {
-              return reject(err)
-            }).on('close', () => {
-              resolve(true)
-            })
-          }
-          else {
-            spawn('sudo', ['killall', '-HUP', 'mDNSResponder']).on('error', (err) => {
-              return reject(err)
-            }).on('close', () => {
-              resolve(true)
-            })
-          }
-        }
-      })
+      if (process.platform === 'win32') {
+        spawn('ipconfig', ['/flushdns']).on('error', (err) => {
+          consola.error(err)
+          return resolve(false)
+        }).on('close', () => {
+          resolve(true)
+        })
+      }
+      else {
+        spawn('sudo', ['-E', 'killall', '-HUP', 'mDNSResponder']).on('error', (err) => {
+          consola.error(err)
+          return resolve(false)
+        }).on('close', () => {
+          resolve(true)
+        })
+      }
     })
   }
 
@@ -171,18 +170,19 @@ export class CaddyInstant {
     if (!this.inited)
       await this.init()
 
-    if (!await this.updateHost(source.split(':')[0], target.split(':')[0]))
-      throw new Error('update host failed')
-
     if (await tryPort(443))
       await kill(443, 'tcp')
     if (process.platform === 'win32' && await tryPort(80))
       await kill(80, 'tcp')
 
-    return new Promise<() => Promise<void>>((resolve, reject) => {
+    if (!await this.updateHost(source.split(':')[0], target.split(':')[0]))
+      throw new Error('update host failed')
+    consola.success('update host success\n')
+
+    return new Promise<(callback?: () => any) => Promise<void>>((resolve, reject) => {
       // caddy reverse-proxy --from target --to source --internal-certs
       const child = process.platform !== 'win32'
-        ? spawn('sudo', [caddyPath, 'reverse-proxy', '--from', `${target.split(':')[0]}`, '--to', `${source}`, '--internal-certs'])
+        ? spawn('sudo', ['-E', caddyPath, 'reverse-proxy', '--from', `${target.split(':')[0]}`, '--to', `${source}`, '--internal-certs'])
         : spawn(caddyPath, ['reverse-proxy', '--from', `${target.split(':')[0]}`, '--to', `${source}`, '--internal-certs'])
 
       child.on('error', (err) => {
@@ -205,17 +205,25 @@ export class CaddyInstant {
 
       child.stdout.on('data', (_data) => {
         consola.info(_data.toString())
-        resolve(async () => {
-          if (!restore)
+        resolve(async (callback?: () => any) => {
+          if (!restore || this.stoped)
             return
 
-          if (await this.restoreHost(source.split(':')[0], target.split(':')[0]))
-            consola.success('restore host success\n')
+          try {
+            if (await this.restoreHost(source.split(':')[0], target.split(':')[0]))
+              consola.success('restore host success\n')
 
-          else
+            else
+              consola.fail('restore host failed\n')
+          }
+          catch (e) {
+            consola.error(e)
             consola.fail('restore host failed\n')
+          }
 
+          this.stoped = true
           child.kill()
+          callback && callback()
         })
       })
     })
