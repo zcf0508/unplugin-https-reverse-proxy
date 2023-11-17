@@ -39,6 +39,7 @@ function getNumber(number: number) {
 
 export function logProgress(percent: number | string) {
   if (!spinner) {
+    // empty a line before start
     consola.log('')
     spinner = ora({
       text: 'Start Download Caddy: 0%',
@@ -57,5 +58,9 @@ export function logProgressOver() {
     })
     spinner.start()
   }
-  else { spinner.succeed() }
+  else {
+    spinner.succeed()
+    // empty a line after succeed
+    consola.log('')
+  }
 }
