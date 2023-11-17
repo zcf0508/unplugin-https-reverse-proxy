@@ -9,7 +9,7 @@ import * as hostile from 'hostile'
 import kill from 'kill-port'
 import { consola } from '../utils'
 import { caddyPath, supportList } from './constants'
-import { tryPort } from './utils'
+import { logProgress, logProgressOver, tryPort } from './utils'
 
 export async function download() {
   if (await testCaddy())
@@ -47,7 +47,10 @@ export async function download() {
         http: httpAgent,
         https: httpsAgent,
       },
+    }).on('downloadProgress', (progress) => {
+      logProgress(progress.percent)
     }).pipe(file).on('finish', () => {
+      logProgressOver()
       if (process.platform === 'win32')
         return resolve(caddyPath)
       // chmod +x
