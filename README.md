@@ -57,6 +57,7 @@ module.exports = {
       },
     },
     setupExitSignals: true,
+    allowedHosts: 'all',
   },
   plugins: [
     require('unplugin-https-reverse-proxy/webpack')({ /* options */ })
@@ -98,6 +99,7 @@ module.exports = {
       },
     },
     setupExitSignals: true,
+    allowedHosts: 'all',
   },
   configureWebpack: {
     plugins: [
