@@ -54,10 +54,12 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       config = _config
       registerExit(async () => {
         try {
-          _servce && _servce.close()
-          _servce.httpServer?.close(async () => {
-            _stop && await _stop()
-          })
+          if (_servce) {
+            _servce.httpServer?.close(async () => {
+              _stop && await _stop()
+            })
+            _servce.close()
+          }
           _stop && await _stop()
         }
         catch (e) {
@@ -66,6 +68,9 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       })
     },
     configureServer(server) {
+      if (config.command === 'build')
+        return
+
       const {
         enable = true,
         target = '',
