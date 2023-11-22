@@ -109,10 +109,6 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         }
       }
     },
-    async buildEnd() {
-      // https://github.com/vitejs/vite/commit/4338d7d6f32c8e0e67ff58f0cb8c1a9120294756#diff-c0b6eb176448702b6325d2e1b2567c5ccf969f03eef1242950e0bfb18877022fR580
-      _stop && await _stop()
-    },
   },
   webpack(compiler) {
     const {
@@ -127,14 +123,14 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     }
 
     try {
-      registerExit(async () => {
-        try {
-          _stop && await _stop()
-        }
-        catch (e) {
-          consola.error(e)
-        }
-      })
+      // registerExit(async () => {
+      //   try {
+      //     _stop && await _stop()
+      //   }
+      //   catch (e) {
+      //     consola.error(e)
+      //   }
+      // })
 
       const devServer = {
         host: '127.0.0.1',
