@@ -164,7 +164,7 @@ export class CaddyInstant {
    * @returns
    */
   async run(source: string, target: string, options?: Partial<RunOptions>) {
-    source = source.replace('0.0.0.0', '127.0.0.1').replace('localhost', '127.0.0.1')
+    source = source.replace('0.0.0.0', '127.0.0.1')
     const {
       restore = true,
       base = '/',
