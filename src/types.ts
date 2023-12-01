@@ -3,4 +3,6 @@ export interface Options {
   enable?: boolean
   target: string
   showCaddyLog?: boolean
+  /** default `false` */
+  https?: boolean
 }

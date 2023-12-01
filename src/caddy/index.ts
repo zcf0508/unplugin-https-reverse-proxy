@@ -89,6 +89,7 @@ interface RunOptions {
   restore: boolean
   base: string
   showCaddyLog: boolean
+  https: boolean
 }
 
 export class CaddyInstant {
@@ -108,9 +109,11 @@ export class CaddyInstant {
     this.inited = true
   }
 
-  private updateHost(ip: string, host: string) {
+  private async updateHost(ip: string, host: string) {
     ['localhost', '0.0.0.0'].includes(ip) && (ip = '127.0.0.1')
+    this.host.add('127.0.0.1', 'localhost')
     this.host.add(ip, host)
+    await this.host.updateFinish()
     return new Promise<boolean>((resolve, reject) => {
       if (process.platform === 'win32') {
         spawn('ipconfig', ['/flushdns']).on('error', (err) => {
@@ -131,9 +134,10 @@ export class CaddyInstant {
     })
   }
 
-  private restoreHost(ip: string, host: string) {
+  private async restoreHost(ip: string, host: string) {
     ['localhost', '0.0.0.0'].includes(ip) && (ip = '127.0.0.1')
     this.host.remove(ip, host)
+    await this.host.updateFinish()
     return new Promise<boolean>((resolve, reject) => {
       if (process.platform === 'win32') {
         spawn('ipconfig', ['/flushdns']).on('error', (err) => {
@@ -165,6 +169,7 @@ export class CaddyInstant {
       restore = true,
       base = '/',
       showCaddyLog = false,
+      https = false,
     } = options || {}
 
     if (!this.inited)
@@ -182,7 +187,7 @@ export class CaddyInstant {
     return new Promise<(callback?: () => any) => Promise<void>>((resolve, reject) => {
       // caddy reverse-proxy --from target --to source --internal-certs
       const child = process.platform !== 'win32'
-        ? spawn('sudo', ['-E', caddyPath, 'reverse-proxy', '--from', `${target.split(':')[0]}`, '--to', `${source}`, '--internal-certs'])
+        ? spawn('sudo', ['-E', caddyPath, 'reverse-proxy', '--from', `${target.split(':')[0]}${https ? '' : ':80'}`, '--to', `${source}`, '--internal-certs', '--insecure', '--disable-redirects'])
         : spawn(caddyPath, ['reverse-proxy', '--from', `${target.split(':')[0]}`, '--to', `${source}`, '--internal-certs'])
 
       child.on('error', (err) => {

@@ -8,9 +8,9 @@ module.exports = defineConfig({
     client: {
       // ↓ for HMR
       webSocketURL: {
-        protocol: 'wss',
+        // protocol: 'wss',   // <- if you set options.https to `true`
+        // port: 443,         // <- if you set options.https to `true`
         hostname: 'test.abc.com', // <- target hostname
-        port: 443,
       },
     },
   },

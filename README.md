@@ -19,6 +19,7 @@ interface Options {
   enable?: boolean // <- default: true
   target: string // <- https target hostname
   showCaddyLog?: boolean // <- default: false
+  https?: boolean // <- default: false
 }
 ```
 
@@ -51,9 +52,9 @@ module.exports = {
     client: {
       // ↓ for HMR
       webSocketURL: {
-        protocol: 'wss',
+        // protocol: 'wss',   // <- if you set options.https to `true`
+        // port: 443,         // <- if you set options.https to `true`
         hostname: 'xxx', // <- target hostname
-        port: 443,
       },
     },
     setupExitSignals: true,
@@ -93,8 +94,8 @@ module.exports = {
     client: {
       // ↓ for HMR
       webSocketURL: {
-        protocol: 'wss',
-        hostname: 'xxx', // <- target hostname
+        // protocol: 'wss',   // <- if you set options.https to `true`
+        // port: 443,         // <- if you set options.https to `true`
         port: 443,
       },
     },

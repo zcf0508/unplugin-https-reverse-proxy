@@ -100,10 +100,10 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
           caddy = new CaddyInstant()
           caddy.run(source, target, {
             base,
-            showCaddyLog: options.showCaddyLog,
+            ...options,
           }).then((stop) => {
             const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
-            consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}${base}`)}`)
+            consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
             !_stop && (_stop = once(stop))
           }).catch((e) => {
             throw e
@@ -166,12 +166,12 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       caddy = new CaddyInstant()
 
       caddy.run(source, target, {
-        showCaddyLog: options.showCaddyLog,
+        ...options,
       }).then((stop) => {
         const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
 
         compiler.hooks.done.tap('unplugin-https-reverse-proxy', () => {
-          consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`https://${target}`)}`)
+          consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}`)}`)
 
           !_stop && (_stop = once(stop))
         })
