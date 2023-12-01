@@ -175,9 +175,9 @@ export class CaddyInstant {
     if (!this.inited)
       await this.init()
 
-    if (await tryPort(443))
+    if (https && await tryPort(443))
       await kill(443, 'tcp')
-    if (process.platform === 'win32' && await tryPort(80))
+    if ((process.platform === 'win32' || !https) && await tryPort(80))
       await kill(80, 'tcp')
 
     if (!await this.updateHost(source.split(':')[0], target.split(':')[0]))
