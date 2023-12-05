@@ -16,10 +16,14 @@ UHRP_AUTO_INSTALL_CADDY=true npm i unplugin-https-reverse-proxy --save-dev
 
 ```ts
 interface Options {
-  enable?: boolean // <- default: true
-  target: string // <- https target hostname
-  showCaddyLog?: boolean // <- default: false
-  https?: boolean // <- default: false
+  /** default: true */
+  enable?: boolean
+  /** target hostname */
+  target: string
+  /** default: false */
+  showCaddyLog?: boolean
+  /** default: false */
+  https?: boolean
 }
 ```
 
@@ -44,24 +48,40 @@ Example: [`playground/`](./playground/)
 <details>
 <summary>Webpack</summary><br>
 
-```ts
+```js
 // webpack.config.js
+
+/** @type {Parameters<import('unplugin-https-reverse-proxy/webpack')['default']>[0]} */
+const reverseProxyOptions = {
+  enable: false,
+  target: 'xxx',
+  https: false,
+}
+
 module.exports = {
   /* ... */
   devServer: {
     client: {
       // ↓ for HMR
       webSocketURL: {
-        // protocol: 'wss',   // <- if you set options.https to `true`
-        // port: 443,         // <- if you set options.https to `true`
-        hostname: 'xxx', // <- target hostname
-      },
+        ...(reverseProxyOptions.enable
+          ? {
+              hostname: reverseProxyOptions.target,
+            }
+          : {}),
+        ...(reverseProxyOptions.enable && reverseProxyOptions.https
+          ? {
+              protocol: 'wss',
+              port: 443,
+            }
+          : {})
+      }
     },
     setupExitSignals: true,
     allowedHosts: 'all',
   },
   plugins: [
-    require('unplugin-https-reverse-proxy/webpack')({ /* options */ })
+    require('unplugin-https-reverse-proxy/webpack')(reverseProxyOptions)
   ]
 }
 ```
@@ -71,7 +91,7 @@ module.exports = {
 <details>
 <summary>Nuxt</summary><br>
 
-```ts
+```js
 // nuxt.config.js
 export default defineNuxtConfig({
   modules: [
@@ -87,24 +107,40 @@ export default defineNuxtConfig({
 <details>
 <summary>Vue CLI</summary><br>
 
-```ts
+```js
 // vue.config.js
+
+/** @type {Parameters<import('unplugin-https-reverse-proxy/webpack')['default']>[0]} */
+const reverseProxyOptions = {
+  enable: false,
+  target: 'xxx',
+  https: false,
+}
+
 module.exports = {
   devServer: {
     client: {
       // ↓ for HMR
       webSocketURL: {
-        // protocol: 'wss',   // <- if you set options.https to `true`
-        // port: 443,         // <- if you set options.https to `true`
-        port: 443,
-      },
+        ...(reverseProxyOptions.enable
+          ? {
+              hostname: reverseProxyOptions.target,
+            }
+          : {}),
+        ...(reverseProxyOptions.enable && reverseProxyOptions.https
+          ? {
+              protocol: 'wss',
+              port: 443,
+            }
+          : {})
+      }
     },
     setupExitSignals: true,
     allowedHosts: 'all',
   },
   configureWebpack: {
     plugins: [
-      require('unplugin-https-reverse-proxy/webpack')({ /* options */ }),
+      require('unplugin-https-reverse-proxy/webpack')(reverseProxyOptions),
     ],
   },
 }
