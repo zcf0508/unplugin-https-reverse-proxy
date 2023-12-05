@@ -123,6 +123,9 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     },
   },
   webpack(compiler) {
+    if (process.env.NODE_ENV !== 'development')
+      return
+
     const {
       enable = true,
       target = '',
