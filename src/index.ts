@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { chmodSync } from 'node:fs'
 import type { UnpluginFactory } from 'unplugin'
 import { createUnplugin } from 'unplugin'
 import type { ResolvedConfig, ViteDevServer } from 'vite'
@@ -37,12 +38,12 @@ function registerExit(clear: (() => Promise<any>) | (() => any)) {
 
   process.once('SIGINT', async () => {
     await clear()
-    process.emit('SIGINT')
+    process.exit(0)
   })
 
   process.once('SIGTERM', async () => {
     await clear()
-    process.emit('SIGTERM')
+    process.exit(0)
   })
 }
 
@@ -87,6 +88,12 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       const _printUrls = server.printUrls
       server.printUrls = () => {
         _printUrls()
+
+        // fix `Error: EPERM: operation not permitted`
+        const pwd = process.cwd()
+        const vireCacheDir = `${pwd}/node_modules/.vite`
+        chmodSync(vireCacheDir, 0o777)
+
         let source = `localhost:${config.server.port}`
         const url = server.resolvedUrls?.local[0]
         if (url) {
