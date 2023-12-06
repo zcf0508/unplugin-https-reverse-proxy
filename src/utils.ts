@@ -1,3 +1,5 @@
+import process from 'node:process'
+import { execSync } from 'node:child_process'
 import { createConsola } from 'consola'
 
 export const consola = createConsola({
@@ -11,5 +13,20 @@ export function once<T extends (...args: any[]) => any>(fn: T): (...args: Parame
       return
     called = true
     return fn(...args)
+  }
+}
+
+export function isAdmin() {
+  if (process.platform === 'win32') {
+    try {
+      execSync('net session', { stdio: 'ignore' })
+      return true
+    }
+    catch {
+      return false
+    }
+  }
+  else {
+    return process.getuid && process.getuid() === 0
   }
 }

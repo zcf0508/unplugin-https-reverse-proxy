@@ -4,7 +4,7 @@ import type { UnpluginFactory } from 'unplugin'
 import { createUnplugin } from 'unplugin'
 import type { ResolvedConfig, ViteDevServer } from 'vite'
 import c from 'picocolors'
-import { consola, once } from './utils'
+import { consola, isAdmin, once } from './utils'
 import type { Options } from './types'
 import { CaddyInstant } from './caddy'
 
@@ -69,6 +69,11 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       })
     },
     configureServer(server) {
+      if (!isAdmin()) {
+        consola.warn('please run as administrator')
+        return
+      }
+
       if (config.command === 'build')
         return
 
@@ -124,6 +129,11 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     },
   },
   webpack(compiler) {
+    if (!isAdmin()) {
+      consola.warn('please run as administrator')
+      return
+    }
+
     if (process.env.NODE_ENV !== 'development')
       return
 
