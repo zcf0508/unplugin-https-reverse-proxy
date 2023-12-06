@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { chmodSync } from 'node:fs'
+import { chmodSync, existsSync } from 'node:fs'
 import type { UnpluginFactory } from 'unplugin'
 import { createUnplugin } from 'unplugin'
 import type { ResolvedConfig, ViteDevServer } from 'vite'
@@ -92,7 +92,8 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         // fix `Error: EPERM: operation not permitted`
         const pwd = process.cwd()
         const vireCacheDir = `${pwd}/node_modules/.vite`
-        chmodSync(vireCacheDir, 0o777)
+        if (existsSync(vireCacheDir))
+          chmodSync(vireCacheDir, 0o777)
 
         let source = `localhost:${config.server.port}`
         const url = server.resolvedUrls?.local[0]
