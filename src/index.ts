@@ -149,15 +149,6 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     }
 
     try {
-      // registerExit(async () => {
-      //   try {
-      //     _stop && await _stop()
-      //   }
-      //   catch (e) {
-      //     consola.error(e)
-      //   }
-      // })
-
       const devServer = {
         host: 'localhost',
         port: 8080,
@@ -171,17 +162,29 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         return
 
       // https://github.com/webpack/webpack-dev-server/blob/master/lib/Server.js#L1913
-      const _close = compiler.close.bind(compiler)
-      compiler.close = async (callback: Parameters<typeof _close>[0]) => {
-        try {
-          _stop && await _stop(() => {
-            _close && _close(callback)
-          })
+      const _close = compiler.close?.bind(compiler)
+      if (_close) {
+        compiler.close = async (callback: Parameters<typeof _close>[0]) => {
+          try {
+            _stop && await _stop(() => {
+              _close && _close(callback)
+            })
+          }
+          catch (e) {
+            consola.error(e)
+            process.exit(1)
+          }
         }
-        catch (e) {
-          consola.error(e)
-          process.exit(1)
-        }
+      }
+      else {
+        registerExit(async () => {
+          try {
+            _stop && await _stop()
+          }
+          catch (e) {
+            consola.error(e)
+          }
+        })
       }
 
       caddy = new CaddyInstant()
