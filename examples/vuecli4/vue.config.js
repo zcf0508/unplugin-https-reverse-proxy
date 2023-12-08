@@ -13,6 +13,7 @@ module.exports = {
       Unplugin.default({
         target: 'test.abc.com',
         showCaddyLog: true,
+        https: true,
       }),
     ],
   },

@@ -46,7 +46,7 @@ Example: [`playground/`](./playground/)
 <br></details>
 
 <details>
-<summary>Webpack</summary><br>
+<summary>Webpack 5</summary><br>
 
 ```js
 // webpack.config.js
@@ -89,6 +89,33 @@ module.exports = {
 <br></details>
 
 <details>
+<summary>Webpack 4</summary><br>
+
+```js
+// webpack.config.js
+
+/** @type {Parameters<import('unplugin-https-reverse-proxy/webpack')['default']>[0]} */
+const reverseProxyOptions = {
+  enable: false,
+  target: 'xxx',
+  // https: false, // not support yet
+}
+
+module.exports = {
+  /* ... */
+  devServer: {
+    host: '0.0.0.0',
+    disableHostCheck: true,
+  },
+  plugins: [
+    require('unplugin-https-reverse-proxy/webpack')(reverseProxyOptions)
+  ]
+}
+```
+
+<br></details>
+
+<details>
 <summary>Nuxt</summary><br>
 
 ```js
@@ -105,7 +132,7 @@ export default defineNuxtConfig({
 <br></details>
 
 <details>
-<summary>Vue CLI</summary><br>
+<summary>Vue CLI 5</summary><br>
 
 ```js
 // vue.config.js
@@ -137,6 +164,34 @@ module.exports = {
     },
     setupExitSignals: true,
     allowedHosts: 'all',
+  },
+  configureWebpack: {
+    plugins: [
+      require('unplugin-https-reverse-proxy/webpack')(reverseProxyOptions),
+    ],
+  },
+}
+```
+
+<br></details>
+
+<details>
+<summary>Vue CLI 4</summary><br>
+
+```js
+// vue.config.js
+
+/** @type {Parameters<import('unplugin-https-reverse-proxy/webpack')['default']>[0]} */
+const reverseProxyOptions = {
+  enable: false,
+  target: 'xxx',
+  // https: false, // not support yet
+}
+
+module.exports = {
+  devServer: {
+    host: '0.0.0.0',
+    disableHostCheck: true,
   },
   configureWebpack: {
     plugins: [

@@ -177,6 +177,8 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         }
       }
       else {
+        // webpack 4 not support yet
+        options.https = false
         registerExit(async () => {
           try {
             _stop && await _stop()
