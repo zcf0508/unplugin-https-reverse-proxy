@@ -5,15 +5,11 @@ import { spawn } from 'node:child_process'
 import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
-
-// @ts-expect-error no type
-import _Hosts from 'hosts-so-easy'
 import kill from 'kill-port'
 import { consola } from '../utils'
+import { addHost, removeHost } from '../host'
 import { caddyPath, supportList } from './constants'
 import { logProgress, logProgressOver, tryPort } from './utils'
-
-const Hosts = _Hosts.default || _Hosts
 
 export async function download() {
   if (await testCaddy())
@@ -95,10 +91,8 @@ interface RunOptions {
 export class CaddyInstant {
   private inited = false
   private stoped = false
-  private host: typeof Hosts
 
   constructor() {
-    this.host = new Hosts()
     testCaddy().then(() => {
       this.inited = true
     })
@@ -107,55 +101,6 @@ export class CaddyInstant {
   async init() {
     await download()
     this.inited = true
-  }
-
-  private async updateHost(ip: string, host: string) {
-    ['localhost', '0.0.0.0'].includes(ip) && (ip = '127.0.0.1')
-    this.host.add('127.0.0.1', 'localhost')
-    this.host.add(ip, host)
-    await this.host.updateFinish()
-    return new Promise<boolean>((resolve, reject) => {
-      if (process.platform === 'win32') {
-        spawn('ipconfig', ['/flushdns']).on('error', (err) => {
-          consola.error(err)
-          return resolve(false)
-        }).on('close', () => {
-          resolve(true)
-        })
-      }
-      else {
-        spawn('sudo', ['-E', 'killall', '-HUP', 'mDNSResponder']).on('error', (err) => {
-          consola.error(err)
-          return resolve(false)
-        }).on('close', () => {
-          resolve(true)
-        })
-      }
-    })
-  }
-
-  private async restoreHost(ip: string, host: string) {
-    ['localhost', '0.0.0.0'].includes(ip) && (ip = '127.0.0.1')
-    this.host.remove(ip, host)
-    await this.host.updateFinish()
-    return new Promise<boolean>((resolve, reject) => {
-      if (process.platform === 'win32') {
-        spawn('ipconfig', ['/flushdns']).on('error', (err) => {
-          consola.error(err)
-          return resolve(false)
-        }).on('close', () => {
-          resolve(true)
-        })
-      }
-      else {
-        spawn('sudo', ['-E', 'killall', '-HUP', 'mDNSResponder']).on('error', (err) => {
-          consola.error(err)
-          return resolve(false)
-        }).on('close', () => {
-          resolve(true)
-        })
-      }
-    })
   }
 
   /**
@@ -180,11 +125,11 @@ export class CaddyInstant {
     if ((process.platform === 'win32' || !https) && await tryPort(80))
       await kill(80, 'tcp')
 
-    if (!await this.updateHost(source.split(':')[0], target.split(':')[0]))
+    if (!await addHost(source.split(':')[0], target.split(':')[0]))
       throw new Error('update host failed')
     consola.success('update host success\n')
 
-    return new Promise<(callback?: () => any) => Promise<void>>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       // caddy reverse-proxy --from target --to source --internal-certs
       const child = process.platform !== 'win32'
         ? spawn('sudo', ['-E', caddyPath, 'reverse-proxy', '--from', `${target.split(':')[0]}${https ? '' : ':80'}`, '--to', `${source}`, '--internal-certs', '--insecure', '--disable-redirects'])
@@ -193,6 +138,55 @@ export class CaddyInstant {
       child.on('error', (err) => {
         return reject(err)
       })
+
+      process.on('SIGINT', async () => {
+        if (!restore || this.stoped)
+          return
+
+        try {
+          if (await removeHost(source.split(':')[0], target.split(':')[0]))
+            consola.success('restore host success\n')
+
+          else
+            consola.fail('restore host failed\n')
+        }
+        catch (e) {
+          consola.error(e)
+          consola.fail('restore host failed\n')
+        }
+        finally {
+          this.stoped = true
+          process.nextTick(() => {
+            process.exit()
+          })
+        }
+      })
+
+      const originalExit = process.exit
+
+      // @ts-expect-error override
+      process.exit = async (code?: number) => {
+        if (!restore || this.stoped)
+          return originalExit(code)
+
+        try {
+          if (await removeHost(source.split(':')[0], target.split(':')[0]))
+            consola.success('restore host success\n')
+
+          else
+            consola.fail('restore host failed\n')
+        }
+        catch (e) {
+          consola.error(e)
+          consola.fail('restore host failed\n')
+        }
+        finally {
+          this.stoped = true
+          process.nextTick(() => {
+            originalExit(code)
+          })
+        }
+      }
 
       child.stderr.on('data', (data) => {
         const lines = (data.toString() as string).split('\n').map(line => line.trim())
@@ -210,26 +204,7 @@ export class CaddyInstant {
 
       child.stdout.on('data', (_data) => {
         consola.info(_data.toString())
-        resolve(async (callback?: () => any) => {
-          if (!restore || this.stoped)
-            return
-
-          try {
-            if (await this.restoreHost(source.split(':')[0], target.split(':')[0]))
-              consola.success('restore host success\n')
-
-            else
-              consola.fail('restore host failed\n')
-          }
-          catch (e) {
-            consola.error(e)
-            consola.fail('restore host failed\n')
-          }
-
-          this.stoped = true
-          child.kill()
-          callback && callback()
-        })
+        resolve()
       })
     })
   }

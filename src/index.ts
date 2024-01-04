@@ -4,7 +4,7 @@ import type { UnpluginFactory } from 'unplugin'
 import { createUnplugin } from 'unplugin'
 import type { ResolvedConfig, ViteDevServer } from 'vite'
 import c from 'picocolors'
-import { consola, isAdmin, once } from './utils'
+import { consola, isAdmin } from './utils'
 import type { Options } from './types'
 import { CaddyInstant } from './caddy'
 
@@ -12,40 +12,7 @@ let config: ResolvedConfig
 
 let caddy: CaddyInstant
 
-let _stop: (callback?: () => any) => Promise<any>
 let _servce: ViteDevServer
-
-function registerExit(clear: (() => Promise<any>) | (() => any)) {
-  process.on('beforeExit', async (_code) => {
-    await clear()
-  })
-
-  process.on('uncaughtException', async (err) => {
-    console.error('An uncaught error occurred!', err.stack)
-    await clear()
-    process.nextTick(() => {
-      process.exit(1)
-    })
-  })
-
-  process.on('unhandledRejection', async (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-    await clear()
-    process.nextTick(() => {
-      process.exit(1)
-    })
-  })
-
-  process.once('SIGINT', async () => {
-    await clear()
-    process.exit(0)
-  })
-
-  process.once('SIGTERM', async () => {
-    await clear()
-    process.exit(0)
-  })
-}
 
 export const unpluginFactory: UnpluginFactory<Options> = options => ({
   name: 'unplugin-https-reverse-proxy',
@@ -53,20 +20,6 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
   vite: {
     configResolved(_config) {
       config = _config
-      registerExit(async () => {
-        try {
-          if (_servce) {
-            _servce.httpServer?.close(async () => {
-              _stop && await _stop()
-            })
-            _servce.close()
-          }
-          _stop && await _stop()
-        }
-        catch (e) {
-          consola.error(e)
-        }
-      })
     },
     configureServer(server) {
       if (!isAdmin()) {
@@ -114,10 +67,9 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
           caddy.run(source, target, {
             base,
             ...options,
-          }).then((stop) => {
+          }).then(() => {
             const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
             consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
-            !_stop && (_stop = once(stop))
           }).catch((e) => {
             throw e
           })
@@ -165,41 +117,25 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       const _close = compiler.close?.bind(compiler)
       if (_close) {
         compiler.close = async (callback: Parameters<typeof _close>[0]) => {
-          try {
-            _stop && await _stop(() => {
-              _close && _close(callback)
-            })
-          }
-          catch (e) {
-            consola.error(e)
-            process.exit(1)
-          }
+          process.on('exit', () => {
+            _close && _close(callback)
+          })
         }
       }
       else {
         // webpack 4 not support yet
         options.https = false
-        registerExit(async () => {
-          try {
-            _stop && await _stop()
-          }
-          catch (e) {
-            consola.error(e)
-          }
-        })
       }
 
       caddy = new CaddyInstant()
 
       caddy.run(source, target, {
         ...options,
-      }).then((stop) => {
+      }).then(() => {
         const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
 
         compiler.hooks.done.tap('unplugin-https-reverse-proxy', () => {
           consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}`)}`)
-
-          !_stop && (_stop = once(stop))
         })
       }).catch((e) => {
         throw e

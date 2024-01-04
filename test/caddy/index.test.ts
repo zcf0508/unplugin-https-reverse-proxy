@@ -11,9 +11,7 @@ describe('caddy', () => {
 
   it('reverse-proxy', async () => {
     const caddy = new CaddyInstant()
-    const stop = await caddy.run('127.0.0.1:8080', 'test.abc.com')
-    expect(stop).toBeTruthy()
-    await stop()
+    await caddy.run('127.0.0.1:8080', 'test.abc.com')
   })
 }, {
   timeout: 10000000,
