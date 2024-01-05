@@ -162,7 +162,7 @@ export class CaddyInstant {
         }
       })
 
-      const originalExit = process.exit
+      const originalExit = process.exit.bind(process)
 
       // @ts-expect-error override
       process.exit = async (code?: number) => {
