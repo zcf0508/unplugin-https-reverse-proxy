@@ -4,6 +4,7 @@ import { chmodSync } from 'node:fs'
 
 // @ts-expect-error no type
 import _Hosts from 'hosts-so-easy'
+import { consola } from '../utils'
 
 const Hosts = _Hosts.default || _Hosts
 
@@ -26,7 +27,7 @@ async function syncHost() {
         : 'sudo -E killall -HUP mDNSResponder',
       (error, stdout, stderr) => {
         if (error) {
-          console.error(`exec error: ${error}`)
+          consola.error(`exec error: ${error}`)
           return resolve(false)
         }
         return resolve(true)
@@ -39,6 +40,8 @@ export async function addHost(ip: string, host: string) {
     chmodSync(getPathOfSystemHostsPath(), 0o777)
   hostInstance.add('127.0.0.1', 'localhost')
   hostInstance.add(ip, host)
+  if (ip === 'localhost')
+    hostInstance.add('127.0.0.1', host)
   await hostInstance.updateFinish()
   return await syncHost()
 }
