@@ -12,7 +12,43 @@ let config: ResolvedConfig
 
 let caddy: CaddyInstant
 
-let _servce: ViteDevServer
+export function vitePrintUrls(
+  server: ViteDevServer,
+  options: Options,
+  source: string,
+  target: string,
+  base: string = '/',
+  _printUrls?: () => void,
+) {
+  _printUrls?.()
+
+  // fix `Error: EPERM: operation not permitted`
+  const pwd = process.cwd()
+  const viteCacheDir = `${pwd}/node_modules/.vite`
+  if (existsSync(viteCacheDir))
+    chmodSync(viteCacheDir, 0o777)
+  const nuxtCacheDir = `${pwd}/.nuxt`
+  if (existsSync(nuxtCacheDir))
+    chmodSync(nuxtCacheDir, 0o777)
+
+  try {
+    if (caddy)
+      return
+    caddy = new CaddyInstant()
+    caddy.run(source, target, {
+      base,
+      ...options,
+    }).then(() => {
+      const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
+      consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
+    }).catch((e) => {
+      throw e
+    })
+  }
+  catch (e) {
+    consola.error(e)
+  }
+}
 
 export const unpluginFactory: UnpluginFactory<Options> = options => ({
   name: 'unplugin-https-reverse-proxy',
@@ -41,43 +77,18 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         return
       }
 
-      _servce = server
+      const _printUrls = server.printUrls.bind(server)
 
-      const _printUrls = server.printUrls
-      server.printUrls = () => {
-        _printUrls()
-
-        // fix `Error: EPERM: operation not permitted`
-        const pwd = process.cwd()
-        const vireCacheDir = `${pwd}/node_modules/.vite`
-        if (existsSync(vireCacheDir))
-          chmodSync(vireCacheDir, 0o777)
-
-        let source = `localhost:${config.server.port}`
-        const url = server.resolvedUrls?.local[0]
-        if (url) {
-          const u = new URL(url)
-          source = u.host
-        }
-        const base = server.config.base || '/'
-        try {
-          if (caddy)
-            return
-          caddy = new CaddyInstant()
-          caddy.run(source, target, {
-            base,
-            ...options,
-          }).then(() => {
-            const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
-            consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
-          }).catch((e) => {
-            throw e
-          })
-        }
-        catch (e) {
-          consola.error(e)
-        }
+      let source = `localhost:${config.server.port || 5173}`
+      const url = server.resolvedUrls?.local[0]
+      if (url) {
+        const u = new URL(url)
+        source = u.host
       }
+
+      const base = server.config.base || '/'
+
+      server.printUrls = () => vitePrintUrls(server, options, source, target, base, _printUrls)
     },
   },
   webpack(compiler) {

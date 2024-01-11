@@ -81,6 +81,7 @@
     "build:fix": "esno scripts/postbuild.ts",
     "lint": "eslint .",
     "play": "npm -C examples/vite run dev",
+    "play:nuxt": "npm -C examples/nuxt run dev",
     "play:vuecli": "npm -C examples/vuecli run serve",
     "play:vuecli4": "npm -C examples/vuecli4 run serve",
     "prepublishOnly": "npm run build",
