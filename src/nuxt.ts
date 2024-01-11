@@ -1,10 +1,9 @@
-import { addVitePlugin, addWebpackPlugin, defineNuxtModule } from '@nuxt/kit'
+import process from 'node:process'
+import { defineNuxtModule } from '@nuxt/kit'
 import type { ViteDevServer } from 'vite'
-import vite from './vite'
-import webpack from './webpack'
 import type { Options } from './types'
 import '@nuxt/schema'
-import { consola, once } from './utils'
+import { consola, isAdmin, once } from './utils'
 import { vitePrintUrls } from '.'
 
 export interface ModuleOptions extends Options {
@@ -17,8 +16,24 @@ export default defineNuxtModule<ModuleOptions>({
     configKey: 'unpluginHttpsReverseProxy',
   },
   setup(options, _nuxt) {
-    addVitePlugin(() => vite(options))
-    addWebpackPlugin(() => webpack(options))
+    if (!isAdmin()) {
+      consola.warn('please run as administrator')
+      return
+    }
+
+    if (process.env.NODE_ENV !== 'development')
+      return
+
+    const {
+      enable = true,
+      target = '',
+    } = options
+    if (!enable)
+      return
+    if (!target) {
+      consola.fail('please provide target')
+      return
+    }
 
     // https://github.com/nuxt/cli/issues/220#issuecomment-1735394141
     let url = ''
