@@ -166,6 +166,10 @@ export class CaddyInstant {
 
       // @ts-expect-error override
       process.exit = async (code?: number) => {
+        const port = Number(source.split(':')[1])
+        if (!Number.isNaN(port) && await tryPort(port))
+          await kill(port, 'tcp')
+
         if (!restore || this.stoped)
           return originalExit(code)
 
