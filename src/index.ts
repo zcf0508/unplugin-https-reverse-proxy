@@ -1,16 +1,18 @@
 import process from 'node:process'
-import { chmodSync, existsSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import type { UnpluginFactory } from 'unplugin'
 import { createUnplugin } from 'unplugin'
 import type { ResolvedConfig, ViteDevServer } from 'vite'
 import c from 'picocolors'
-import { consola, isAdmin } from './utils'
+import { chmodRecursive, consola, isAdmin } from './utils'
 import type { Options } from './types'
 import { CaddyInstant } from './caddy'
 
 let config: ResolvedConfig
 
 let caddy: CaddyInstant
+
+const pwd = process.cwd()
 
 export function vitePrintUrls(
   server: ViteDevServer,
@@ -23,13 +25,12 @@ export function vitePrintUrls(
   _printUrls?.()
 
   // fix `Error: EPERM: operation not permitted`
-  const pwd = process.cwd()
   const viteCacheDir = `${pwd}/node_modules/.vite`
   if (existsSync(viteCacheDir))
-    chmodSync(viteCacheDir, 0o777)
+    chmodRecursive(viteCacheDir, 0o777)
   const nuxtCacheDir = `${pwd}/.nuxt`
   if (existsSync(nuxtCacheDir))
-    chmodSync(nuxtCacheDir, 0o777)
+    chmodRecursive(nuxtCacheDir, 0o777)
 
   try {
     if (caddy)
@@ -110,6 +111,10 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       consola.fail('please provide target')
       return
     }
+
+    const nuxtCacheDir = `${pwd}/node_modules/.cache`
+    if (existsSync(nuxtCacheDir))
+      chmodRecursive(nuxtCacheDir, 0o777)
 
     try {
       const devServer = {
