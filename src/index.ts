@@ -2,9 +2,9 @@ import process from 'node:process'
 import { existsSync } from 'node:fs'
 import type { UnpluginFactory } from 'unplugin'
 import { createUnplugin } from 'unplugin'
-import type { ResolvedConfig, ViteDevServer } from 'vite'
+import type { ResolvedConfig } from 'vite'
 import c from 'picocolors'
-import { chmodRecursive, consola, isAdmin } from './utils'
+import { chmodRecursive, consola, isAdmin, once } from './utils'
 import type { Options } from './types'
 import { CaddyInstant } from './caddy'
 
@@ -14,14 +14,13 @@ let caddy: CaddyInstant
 
 const pwd = process.cwd()
 
-export function vitePrintUrls(
-  server: ViteDevServer,
+export const vitePrintUrls = once((
   options: Options,
   source: string,
   target: string,
   base: string = '/',
   _printUrls?: () => void,
-) {
+) => {
   _printUrls?.()
 
   // fix `Error: EPERM: operation not permitted`
@@ -49,7 +48,7 @@ export function vitePrintUrls(
   catch (e) {
     consola.error(e)
   }
-}
+})
 
 export const unpluginFactory: UnpluginFactory<Options> = options => ({
   name: 'unplugin-https-reverse-proxy',
@@ -89,7 +88,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 
       const base = server.config.base || '/'
 
-      server.printUrls = () => vitePrintUrls(server, options, source, target, base, _printUrls)
+      server.printUrls = () => vitePrintUrls(options, source, target, base, _printUrls)
     },
   },
   webpack(compiler) {

@@ -1,9 +1,8 @@
 import process from 'node:process'
 import { defineNuxtModule } from '@nuxt/kit'
-import type { ViteDevServer } from 'vite'
 import type { Options } from './types'
 import '@nuxt/schema'
-import { consola, isAdmin, once } from './utils'
+import { consola, isAdmin } from './utils'
 import { vitePrintUrls } from '.'
 
 export interface ModuleOptions extends Options {
@@ -36,22 +35,13 @@ export default defineNuxtModule<ModuleOptions>({
     }
 
     // https://github.com/nuxt/cli/issues/220#issuecomment-1735394141
-    let url = ''
     _nuxt.hook('listen', (_, listener) => {
-      url = listener.url
-    })
-
-    _nuxt.hook('vite:serverCreated', once((server: ViteDevServer) => {
+      const url = listener.url
       const source = new URL(url).host
-
-      if (!options.target) {
-        consola.fail('please provide target')
-        return
-      }
 
       const base = _nuxt.options.app.baseURL || '/'
 
-      vitePrintUrls(server, options, source, options.target, base)
-    }))
+      vitePrintUrls(options, source, options.target, base)
+    })
   },
 })
