@@ -15,6 +15,9 @@ module.exports = defineConfig({
     },
   },
   configureWebpack: {
+    cache: {
+      type: 'filesystem',
+    },
     plugins: [
       Unplugin.default({
         target: 'test.abc.com',

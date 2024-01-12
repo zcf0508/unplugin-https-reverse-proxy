@@ -102,6 +102,9 @@ importers:
       nuxt:
         specifier: ^3.9.0
         version: 3.9.0(@types/node@20.9.1)(eslint@8.54.0)(rollup@3.29.4)(typescript@5.2.2)(vite@4.5.0)
+      unplugin-https-reverse-proxy:
+        specifier: workspace:*
+        version: link:../..
       vue:
         specifier: ^3.4.6
         version: 3.4.6(typescript@5.2.2)
@@ -3166,6 +3169,7 @@ packages:
     dependencies:
       is-glob: 4.0.3
       micromatch: 4.0.5
+      napi-wasm: 1.1.0
     dev: true
     bundledDependencies:
       - napi-wasm
@@ -13070,6 +13074,10 @@ packages:
       to-regex: 3.0.2
     transitivePeerDependencies:
       - supports-color
+    dev: true
+
+  /napi-wasm@1.1.0:
+    resolution: {integrity: sha512-lHwIAJbmLSjF9VDRm9GoVOy9AGp3aIvkjv+Kvz9h16QR3uSVYH78PNQUnT2U4X53mhlnV2M7wrhibQ3GHicDmg==}
     dev: true
 
   /natural-compare@1.4.0:

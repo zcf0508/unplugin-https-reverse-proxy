@@ -6,7 +6,7 @@ import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import kill from 'kill-port'
-import { consola, once } from '../utils'
+import { chmodRecursive, consola, once  } from '../utils'
 import { addHost, removeHost } from '../host'
 import { TEMP_DIR, caddyPath, supportList } from './constants'
 import { logProgress, logProgressOver, tryPort } from './utils'
@@ -180,6 +180,18 @@ export class CaddyInstant {
         const port = Number(source.split(':')[1])
         if (!Number.isNaN(port) && await tryPort(port))
           await kill(port, 'tcp')
+
+        // fix `Error: EPERM: operation not permitted`
+        const pwd = process.cwd()
+        const viteCacheDir = `${pwd}/node_modules/.vite`
+        if (existsSync(viteCacheDir))
+          chmodRecursive(viteCacheDir, 0o777)
+        const nuxtCacheDir = `${pwd}/.nuxt`
+        if (existsSync(nuxtCacheDir))
+          await chmodRecursive(nuxtCacheDir, 0o777)
+        const webpackCacheDir = `${pwd}/node_modules/.cache`
+        if (existsSync(webpackCacheDir))
+          chmodRecursive(webpackCacheDir, 0o777)
 
         if (!restore || this.stoped)
           return originalExit(code)
