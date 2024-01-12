@@ -6,7 +6,7 @@ import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import kill from 'kill-port'
-import { consola } from '../utils'
+import { consola, once } from '../utils'
 import { addHost, removeHost } from '../host'
 import { TEMP_DIR, caddyPath, supportList } from './constants'
 import { logProgress, logProgressOver, tryPort } from './utils'
@@ -18,8 +18,10 @@ export async function download() {
   return new Promise<string>((resolve, reject) => {
     // https://caddyserver.com/api/download?os=darwin&arch=amd64
 
-    if (!existsSync(TEMP_DIR))
-      mkdirSync(TEMP_DIR)
+    if (!existsSync(TEMP_DIR)) {
+      mkdirSync(TEMP_DIR, { recursive: true })
+      chmodSync(TEMP_DIR, 0o777)
+    }
 
     const file = createWriteStream(caddyPath)
 
@@ -45,6 +47,11 @@ export async function download() {
     const httpAgent = httpProxy ? new HttpProxyAgent(httpProxy) : undefined
     const httpsAgent = httpsProxy ? new HttpsProxyAgent(httpsProxy) : undefined
 
+    const chmodCaddyOnce = once(() => {
+      // chmod +x
+      chmodSync(caddyPath, 0o777)
+    })
+
     got.stream(dowmloadLink, {
       agent: {
         http: httpAgent,
@@ -52,12 +59,13 @@ export async function download() {
       },
     }).on('downloadProgress', (progress) => {
       logProgress(progress.percent)
+      chmodCaddyOnce()
     }).pipe(file).on('finish', () => {
       logProgressOver()
       if (process.platform === 'win32')
         return resolve(caddyPath)
       // chmod +x
-      chmodSync(caddyPath, 0o755)
+      chmodSync(caddyPath, 0o777)
       resolve(caddyPath)
     }).on('error', (err) => {
       // consola.error(err)
