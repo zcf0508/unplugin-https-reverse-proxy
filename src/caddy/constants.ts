@@ -1,7 +1,17 @@
 import { join } from 'node:path'
+import os from 'node:os'
 import process from 'node:process'
+import dotenvFlow from 'dotenv-flow'
 
-export const TEMP_DIR = process.env.UHRP_CADDY_PATH || process.env.TEMP || process.env.TMPDIR || '/tmp'
+dotenvFlow.config()
+
+function resolvePath(path: string) {
+  if (path.startsWith('~'))
+    return join(os.homedir() || '', path.slice(1))
+  return path
+}
+
+export const TEMP_DIR = resolvePath(process.env.UHRP_CADDY_PATH || process.env.TEMP || process.env.TMPDIR || '/tmp')
 export const caddyPath = join(TEMP_DIR, `caddy${process.platform === 'win32' ? '.exe' : ''}`)
 export const caddyFilePath = join(TEMP_DIR, 'CADDYFILE')
 
