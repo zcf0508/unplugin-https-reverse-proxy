@@ -2,7 +2,7 @@
 export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: [
-    ['unplugin-https-reverse-proxy/nuxt', {
+    ['~/../../../src/nuxt', {
       target: 'test.abc.com',
       showCaddyLog: true,
     }],
