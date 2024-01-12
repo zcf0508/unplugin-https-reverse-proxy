@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "nuxt": "^3.9.0",
+    "unplugin-https-reverse-proxy": "workspace:*",
     "vue": "^3.4.6",
     "vue-router": "^4.2.5"
   }

@@ -15,13 +15,13 @@ export default defineNuxtModule<ModuleOptions>({
     configKey: 'unpluginHttpsReverseProxy',
   },
   setup(options, _nuxt) {
+    if (process.env.NODE_ENV !== 'development')
+      return
+
     if (!isAdmin()) {
       consola.warn('please run as administrator')
       return
     }
-
-    if (process.env.NODE_ENV !== 'development')
-      return
 
     const {
       enable = true,
