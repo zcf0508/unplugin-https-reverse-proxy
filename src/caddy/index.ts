@@ -1,6 +1,6 @@
 import { platform } from 'node:os'
 import process from 'node:process'
-import { chmodSync, createWriteStream, existsSync, unlinkSync } from 'node:fs'
+import { chmodSync, createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
@@ -8,7 +8,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent'
 import kill from 'kill-port'
 import { consola } from '../utils'
 import { addHost, removeHost } from '../host'
-import { caddyPath, supportList } from './constants'
+import { TEMP_DIR, caddyPath, supportList } from './constants'
 import { logProgress, logProgressOver, tryPort } from './utils'
 
 export async function download() {
@@ -17,6 +17,9 @@ export async function download() {
 
   return new Promise<string>((resolve, reject) => {
     // https://caddyserver.com/api/download?os=darwin&arch=amd64
+
+    if (!existsSync(TEMP_DIR))
+      mkdirSync(TEMP_DIR)
 
     const file = createWriteStream(caddyPath)
 
