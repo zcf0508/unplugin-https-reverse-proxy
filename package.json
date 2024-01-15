@@ -75,10 +75,10 @@
     "src"
   ],
   "scripts": {
-    "postinstall": "esno scripts/postinstall.ts",
+    "postinstall": "tsx scripts/postinstall.ts",
     "build": "tsup",
     "dev": "tsup --watch src",
-    "build:fix": "esno scripts/postbuild.ts",
+    "build:fix": "tsx scripts/postbuild.ts",
     "lint": "eslint .",
     "play": "npm -C examples/vite run dev",
     "play:nuxt": "npm -C examples/nuxt run dev",
@@ -86,7 +86,7 @@
     "play:vuecli4": "npm -C examples/vuecli4 run serve",
     "prepublishOnly": "npm run build",
     "release": "bumpp",
-    "start": "esno src/index.ts",
+    "start": "tsx src/index.ts",
     "test": "vitest"
   },
   "peerDependencies": {
@@ -120,7 +120,6 @@
   "dependencies": {
     "consola": "^3.2.3",
     "dotenv-flow": "^4.1.0",
-    "esno": "^0.17.0",
     "got-cjs": "^12.5.4",
     "hosts-so-easy": "^1.2.9",
     "http-proxy-agent": "^7.0.0",
@@ -128,6 +127,7 @@
     "kill-port": "^2.0.1",
     "ora": "5",
     "picocolors": "^1.0.0",
+    "tsx": "^4.7.0",
     "unplugin": "^1.4.0"
   },
   "devDependencies": {
