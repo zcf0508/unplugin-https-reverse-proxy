@@ -3,7 +3,9 @@ import os from 'node:os'
 import process from 'node:process'
 import dotenvFlow from 'dotenv-flow'
 
-dotenvFlow.config()
+dotenvFlow.config({
+  silent: true,
+})
 
 function resolvePath(path: string) {
   if (path.startsWith('~'))
