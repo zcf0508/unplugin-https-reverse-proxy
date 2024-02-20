@@ -1,7 +1,7 @@
 {
   "name": "rsbuild",
-  "private": true,
   "version": "1.0.0",
+  "private": true,
   "scripts": {
     "dev": "rsbuild dev",
     "build": "rsbuild build",
