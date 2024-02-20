@@ -102,7 +102,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       port: 8080,
       ...compiler.options.devServer,
       // @ts-expect-error vuecli
-      ...process.VUE_CLI_SERVICE.projectOptions.devServer,
+      ...(process.VUE_CLI_SERVICE?.projectOptions.devServer || {}),
     }
     const source = `${devServer.host}:${devServer.port}`
 
