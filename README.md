@@ -2,7 +2,7 @@
 
 [![NPM version](https://img.shields.io/npm/v/unplugin-https-reverse-proxy?color=a1b858&label=)](https://www.npmjs.com/package/unplugin-https-reverse-proxy)
 
-A plugin for https reverse proxy, support `vite` and `webpack`.
+A plugin for https reverse proxy, support `vite`、`webpack` and `rspack`.
 
 ## Install
 
@@ -119,6 +119,90 @@ module.exports = {
   plugins: [
     require('unplugin-https-reverse-proxy/webpack')(reverseProxyOptions)
   ]
+}
+```
+
+<br></details>
+
+<details>
+<summary>Rspack</summary><br>
+
+```js
+// rspack.config.js
+
+/** @type {Parameters<import('unplugin-https-reverse-proxy/webpack')['default']>[0]} */
+const reverseProxyOptions = {
+  enable: false,
+  target: 'xxx',
+  https: false,
+}
+
+module.exports = {
+  /* ... */
+  devServer: {
+    client: {
+      // ↓ for HMR
+      webSocketURL: {
+        ...(reverseProxyOptions.enable
+          ? {
+              hostname: reverseProxyOptions.target,
+            }
+          : {}),
+        ...(reverseProxyOptions.enable && reverseProxyOptions.https
+          ? {
+              protocol: 'wss',
+              port: 443,
+            }
+          : {})
+      }
+    },
+  },
+  plugins: [
+    require('unplugin-https-reverse-proxy/rspack')(reverseProxyOptions)
+  ]
+}
+```
+
+<br></details>
+
+<details>
+<summary>Rsbuild</summary><br>
+
+```js
+// rsbuild.config.js
+
+/** @type {Parameters<import('unplugin-https-reverse-proxy/webpack')['default']>[0]} */
+const reverseProxyOptions = {
+  enable: false,
+  target: 'xxx',
+  https: false,
+}
+
+module.exports = {
+  /* ... */
+  dev: {
+    client: {
+      // ↓ for HMR
+      ...(reverseProxyOptions.enable
+        ? {
+            host: reverseProxyOptions.target,
+          }
+        : {}),
+      ...(reverseProxyOptions.enable && reverseProxyOptions.https
+        ? {
+            protocol: 'wss',
+            port: '443',
+          }
+        : {})
+    },
+  },
+  tools: {
+    rspack: {
+      plugins: [
+        require('unplugin-https-reverse-proxy/rspack')(reverseProxyOptions)
+      ]
+    },
+  },
 }
 ```
 

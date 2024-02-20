@@ -11,7 +11,7 @@ let config: ResolvedConfig
 
 let caddy: CaddyInstant
 
-const pwd = process.cwd()
+const cwd = process.cwd()
 
 export const vitePrintUrls = once((
   options: Options,
@@ -102,7 +102,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       port: 8080,
       ...compiler.options.devServer,
       // @ts-expect-error vuecli
-      ...(process.VUE_CLI_SERVICE?.projectOptions.devServer || {}),
+      ...(process.VUE_CLI_SERVICE?.projectOptions.devServer),
     }
     const source = `${devServer.host}:${devServer.port}`
 
@@ -133,6 +133,52 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       compiler.hooks.done.tap('unplugin-https-reverse-proxy', () => {
         consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}`)}`)
       })
+    }).catch((e) => {
+      throw e
+    })
+  },
+  async rspack(compiler) {
+    if (process.env.NODE_ENV !== 'development')
+      return
+
+    if (!isAdmin()) {
+      consola.warn('please run as administrator')
+      return
+    }
+
+    const {
+      enable = true,
+      target = '',
+    } = options
+    if (!enable)
+      return
+    if (!target) {
+      consola.fail('please provide target')
+      return
+    }
+
+    const devServer = {
+      host: 'localhost',
+      port: 8080,
+      ...compiler.options.devServer,
+      ...(await (await import('@rsbuild/core'))?.loadConfig({
+        cwd,
+      }))?.content?.server,
+    }
+
+    const source = `${devServer.host}:${devServer.port}`
+
+    if (caddy)
+      return
+
+    caddy = new CaddyInstant()
+
+    caddy.run(source, target, {
+      ...options,
+    }).then(() => {
+      const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
+
+      consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}`)}`)
     }).catch((e) => {
       throw e
     })
