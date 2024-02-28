@@ -47,17 +47,18 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       if (config.command !== 'serve')
         return
 
-      if (!isAdmin()) {
-        consola.warn('please run as administrator')
-        return
-      }
-
       const {
         enable = true,
         target = '',
       } = options
+
       if (!enable)
         return
+
+      if (!isAdmin()) {
+        consola.warn('please run as administrator')
+        return
+      }
       if (!target) {
         consola.fail('please provide target')
         return
@@ -81,17 +82,19 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     if (process.env.NODE_ENV !== 'development')
       return
 
+    const {
+      enable = true,
+      target = '',
+    } = options
+
+    if (!enable)
+      return
+
     if (!isAdmin()) {
       consola.warn('please run as administrator')
       return
     }
 
-    const {
-      enable = true,
-      target = '',
-    } = options
-    if (!enable)
-      return
     if (!target) {
       consola.fail('please provide target')
       return
@@ -141,17 +144,19 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     if (process.env.NODE_ENV !== 'development')
       return
 
+    const {
+      enable = true,
+      target = '',
+    } = options
+
+    if (!enable)
+      return
+
     if (!isAdmin()) {
       consola.warn('please run as administrator')
       return
     }
 
-    const {
-      enable = true,
-      target = '',
-    } = options
-    if (!enable)
-      return
     if (!target) {
       consola.fail('please provide target')
       return
