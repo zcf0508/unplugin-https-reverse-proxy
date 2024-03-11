@@ -76,11 +76,11 @@
   },
   "files": [
     "dist",
-    "scripts/postinstall.ts",
+    "scripts/postinstall.cjs",
     "src"
   ],
   "scripts": {
-    "postinstall": "tsx scripts/postinstall.ts",
+    "postinstall": "node scripts/postinstall.cjs",
     "build": "tsup",
     "dev": "tsup --watch src",
     "build:fix": "tsx scripts/postbuild.ts",
