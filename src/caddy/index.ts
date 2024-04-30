@@ -6,8 +6,8 @@ import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import kill from 'kill-port'
-import { chmodRecursive, consola, once } from '../utils'
-import { addHost, removeHost } from '../host'
+import { consola, once, runAsAdmin } from '../utils'
+import { addHost, removeHost } from '../host/cli'
 import { TEMP_DIR, caddyPath, supportList } from './constants'
 import { logProgress, logProgressOver, tryPort } from './utils'
 
@@ -20,7 +20,7 @@ export async function download() {
 
     if (!existsSync(TEMP_DIR)) {
       mkdirSync(TEMP_DIR, { recursive: true })
-      chmodSync(TEMP_DIR, 0o777)
+      chmodSync(TEMP_DIR, 0o744)
     }
 
     const file = createWriteStream(caddyPath)
@@ -46,10 +46,9 @@ export async function download() {
 
     const httpAgent = httpProxy ? new HttpProxyAgent(httpProxy) : undefined
     const httpsAgent = httpsProxy ? new HttpsProxyAgent(httpsProxy) : undefined
-
     const chmodCaddyOnce = once(() => {
       // chmod +x
-      chmodSync(caddyPath, 0o777)
+      chmodSync(caddyPath, 0o744)
     })
 
     got.stream(dowmloadLink, {
@@ -65,7 +64,7 @@ export async function download() {
       if (process.platform === 'win32')
         return resolve(caddyPath)
       // chmod +x
-      chmodSync(caddyPath, 0o777)
+      chmodSync(caddyPath, 0o744)
       resolve(caddyPath)
     }).on('error', (err) => {
       // consola.error(err)
@@ -78,8 +77,8 @@ function testCaddy() {
   return new Promise((resolve, reject) => {
     if (!existsSync(caddyPath))
       return resolve(false)
-    chmodSync(caddyPath, 0o777)
-    const child = process.platform === 'win32' ? spawn(caddyPath, []) : spawn('sudo', ['-E', caddyPath])
+    chmodSync(caddyPath, 0o744)
+    const child = spawn(caddyPath, [])
     child.on('close', () => {
       return resolve(false)
     })
@@ -142,12 +141,37 @@ export class CaddyInstant {
 
     return new Promise<void>((resolve, reject) => {
       // caddy reverse-proxy --from target --to source --internal-certs
-      const child = process.platform !== 'win32'
-        ? spawn('sudo', ['-E', caddyPath, 'reverse-proxy', '--from', `${target.split(':')[0]}${https ? '' : ':80'}`, '--to', `${source}`, '--internal-certs', '--insecure', '--disable-redirects'])
-        : spawn(caddyPath, ['reverse-proxy', '--from', `${target.split(':')[0]}`, '--to', `${source}`, '--internal-certs'])
+      runAsAdmin([caddyPath,
+        'reverse-proxy',
+        '--from',
+        `${target.split(':')[0]}${https ? '' : ':80'}`,
+        '--to',
+        `${source}`,
+        '--internal-certs',
+        '--insecure',
+        '--disable-redirects',
+      ].join(' '), 'caddy', (error, stdout, stderr) => {
+        if (error)
+          return reject(error)
 
-      child.on('error', (err) => {
-        return reject(err)
+        // stderr.on('data', (data: any) => {
+        //   const lines = (data.toString() as string).split('\n').map(line => line.trim())
+        //   for (const line of lines) {
+        //     // caddy log
+        //     // eslint-disable-next-line no-console
+        //     showCaddyLog && line && console.info(line)
+        //     if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
+        //       consola.error(line)
+        //       // child.kill()
+        //       return reject(line)
+        //     }
+        //   }
+        // })
+
+        // stdout.on('data', (_data: any) => {
+        //   consola.info(_data.toString())
+        //   resolve()
+        // })
       })
 
       process.on('SIGINT', async () => {
@@ -181,18 +205,6 @@ export class CaddyInstant {
         if (!Number.isNaN(port) && await tryPort(port))
           await kill(port, 'tcp')
 
-        // fix `Error: EPERM: operation not permitted`
-        const pwd = process.cwd()
-        const viteCacheDir = `${pwd}/node_modules/.vite`
-        if (existsSync(viteCacheDir))
-          chmodRecursive(viteCacheDir, 0o777)
-        const nuxtCacheDir = `${pwd}/.nuxt`
-        if (existsSync(nuxtCacheDir))
-          await chmodRecursive(nuxtCacheDir, 0o777)
-        const webpackCacheDir = `${pwd}/node_modules/.cache`
-        if (existsSync(webpackCacheDir))
-          chmodRecursive(webpackCacheDir, 0o777)
-
         if (!restore || this.stoped)
           return originalExit(code)
 
@@ -215,24 +227,7 @@ export class CaddyInstant {
         }
       }
 
-      child.stderr.on('data', (data) => {
-        const lines = (data.toString() as string).split('\n').map(line => line.trim())
-        for (const line of lines) {
-          // caddy log
-          // eslint-disable-next-line no-console
-          showCaddyLog && line && console.info(line)
-          if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
-            consola.error(line)
-            // child.kill()
-            return reject(line)
-          }
-        }
-      })
-
-      child.stdout.on('data', (_data) => {
-        consola.info(_data.toString())
-        resolve()
-      })
+      resolve()
     })
   }
 }

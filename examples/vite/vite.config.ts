@@ -6,8 +6,10 @@ export default defineConfig({
   plugins: [
     Inspect(),
     Unplugin({
-      target: 'test.abc.com',
+      target: 'test23.abc.com',
       showCaddyLog: true,
+      enable: true,
+      https: false,
     }),
   ],
 })
