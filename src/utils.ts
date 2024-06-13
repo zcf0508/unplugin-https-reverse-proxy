@@ -1,8 +1,12 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 import process from 'node:process'
 import path from 'node:path'
 import { chmod, readdir, stat } from 'node:fs/promises'
 import { execSync } from 'node:child_process'
 import { createConsola } from 'consola'
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+const sudo = require('sudo-prompt')
 
 export const consola = createConsola({
   level: 3,
@@ -40,4 +44,28 @@ export function isAdmin() {
   else {
     return process.getuid && process.getuid() === 0
   }
+}
+
+export function runAsAdmin(command: string, name?: string, fn?: (error: any, stdout: any, stderr: any) => void) {
+  return new Promise<boolean>((resolve, reject) => {
+    consola.log('exec command: ', command)
+    sudo.exec(command, {
+      name: `unpluginHttpsReverseProxy ${name}`,
+    }, (error: any, stdout: any, stderr: any) => {
+      try {
+        fn?.(error, stdout, stderr)
+      }
+      finally {
+        if (error) {
+          consola.error(error)
+          // eslint-disable-next-line prefer-promise-reject-errors
+          reject(false)
+          // eslint-disable-next-line no-unsafe-finally
+          return
+        }
+        consola.success(stdout)
+        resolve(true)
+      }
+    })
+  })
 }

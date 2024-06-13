@@ -55,10 +55,6 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       if (!enable)
         return
 
-      if (!isAdmin()) {
-        consola.warn('please run as administrator')
-        return
-      }
       if (!target) {
         consola.fail('please provide target')
         return

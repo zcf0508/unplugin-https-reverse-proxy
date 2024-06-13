@@ -134,6 +134,7 @@
   "dependencies": {
     "consola": "^3.2.3",
     "dotenv-flow": "^4.1.0",
+    "easy-host-cli": "^1.0.10",
     "got-cjs": "^12.5.4",
     "hosts-so-easy": "^1.2.9",
     "http-proxy-agent": "^7.0.2",
@@ -141,6 +142,7 @@
     "kill-port": "^2.0.1",
     "ora": "5",
     "picocolors": "^1.0.0",
+    "sudo-prompt": "^9.2.1",
     "tsx": "^4.7.1",
     "unplugin": "^1.7.1"
   },
