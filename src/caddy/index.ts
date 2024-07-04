@@ -150,6 +150,27 @@ export class CaddyInstant {
         return reject(err)
       })
 
+      child.stderr.on('data', (data) => {
+        const lines = (data.toString() as string).split('\n').map(line => line.trim())
+        for (const line of lines) {
+          // caddy log
+          // eslint-disable-next-line no-console
+          showCaddyLog && line && console.info(line)
+          if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
+            consola.error(line)
+            // child.kill()
+            return reject(line)
+          }
+          if (line.includes('caddy proxying'))
+            return resolve()
+        }
+      })
+
+      child.stdout.on('data', (_data) => {
+        consola.info(_data.toString())
+        resolve()
+      })
+
       process.on('SIGINT', async () => {
         if (!restore || this.stoped)
           return
@@ -214,25 +235,6 @@ export class CaddyInstant {
           })
         }
       }
-
-      child.stderr.on('data', (data) => {
-        const lines = (data.toString() as string).split('\n').map(line => line.trim())
-        for (const line of lines) {
-          // caddy log
-          // eslint-disable-next-line no-console
-          showCaddyLog && line && console.info(line)
-          if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
-            consola.error(line)
-            // child.kill()
-            return reject(line)
-          }
-        }
-      })
-
-      child.stdout.on('data', (_data) => {
-        consola.info(_data.toString())
-        resolve()
-      })
     })
   }
 }
