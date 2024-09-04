@@ -100,6 +100,7 @@
     "@rsbuild/core": "^0.4.3",
     "@rspack/core": "^0.5.4",
     "esbuild": "*",
+    "proper-lockfile": "^4.1.2",
     "rollup": "^3",
     "vite": ">=3",
     "webpack": "^4 || ^5"

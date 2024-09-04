@@ -55,6 +55,7 @@ var import_got_cjs = require("got-cjs");
 var import_http_proxy_agent = require("http-proxy-agent");
 var import_https_proxy_agent = require("https-proxy-agent");
 var import_kill_port = __toESM(require("kill-port"), 1);
+var lockfile = __toESM(require("proper-lockfile"), 1);
 
 // src/host/index.ts
 var import_node_process2 = __toESM(require("process"), 1);

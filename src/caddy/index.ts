@@ -7,6 +7,7 @@ import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import kill from 'kill-port'
+import * as lockfile from 'proper-lockfile'
 import { chmodRecursive, consola, once } from '../utils'
 import { addHost, removeHost } from '../host'
 import { TEMP_DIR, caddyFilePath, caddyLockFilePath, caddyPath, supportList } from './constants'
@@ -108,8 +109,6 @@ export class CaddyInstant {
   private locked = false
   private caddyfile: string | undefined
 
-  private lockfile: typeof import('proper-lockfile')
-
   constructor() {
     testCaddy().then(async () => {
       await this.getCaddyfile()
@@ -117,16 +116,13 @@ export class CaddyInstant {
       this.inited = true
     })
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    this.lockfile = require('proper-lockfile')
-
     this.locked = this.checkLock()
   }
 
   checkLock() {
     if (!existsSync(caddyLockFilePath))
       writeFileSync(caddyLockFilePath, '')
-    return this.lockfile.checkSync(caddyLockFilePath)
+    return lockfile.checkSync(caddyLockFilePath)
   }
 
   async getCaddyfile() {
@@ -283,7 +279,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
           ? spawn('sudo', ['-E', caddyPath, 'run', '--config', caddyFilePath, '--watch'])
           : spawn(caddyPath, ['run', '--config', caddyFilePath, '--watch'])
 
-        this.lockfile.lockSync(caddyLockFilePath)
+        lockfile.lockSync(caddyLockFilePath)
 
         child.on('error', (err) => {
           return reject(err)
@@ -328,7 +324,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
   async baseCleanup() {
     if (!this.locked) {
       try {
-        await this.lockfile.unlock(caddyLockFilePath)
+        await lockfile.unlock(caddyLockFilePath)
         await unlink(caddyFilePath)
         await unlink(caddyLockFilePath)
       }
