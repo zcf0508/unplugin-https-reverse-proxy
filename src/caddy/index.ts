@@ -134,6 +134,7 @@ export class CaddyInstant {
       await this.initCaddyfile()
 
     this.caddyfile = await readFile(caddyFilePath, 'utf-8')
+    return this.caddyfile
   }
 
   async initCaddyfile() {
@@ -199,7 +200,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
       writeFileSync(caddyLockFilePath, '')
 
     if (!this.locked) {
-      if (https && await tryPort(443))
+      if (await tryPort(443))
         await kill(443, 'tcp')
       if ((process.platform === 'win32' || !https) && await tryPort(80))
         await kill(80, 'tcp')
@@ -211,16 +212,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
           if (!restore || this.stoped)
             return
 
-          if (!this.locked) {
-            try {
-              await this.lockfile.unlock(caddyLockFilePath)
-              await unlink(caddyFilePath)
-              await unlink(caddyLockFilePath)
-            }
-            catch (e) {
-              // consola.error(e)
-            }
-          }
+          await this.baseCleanup()
 
           try {
             if (await removeHost(source.split(':')[0], target.split(':')[0]))
@@ -264,16 +256,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
           if (!restore || this.stoped)
             return originalExit(code)
 
-          if (!this.locked) {
-            try {
-              await this.lockfile.unlock(caddyLockFilePath)
-              await unlink(caddyFilePath)
-              await unlink(caddyLockFilePath)
-            }
-            catch (e) {
-              // consola.error(e)
-            }
-          }
+          await this.baseCleanup()
 
           try {
             if (await removeHost(source.split(':')[0], target.split(':')[0]))
@@ -340,5 +323,18 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
         return resolve()
       }
     })
+  }
+
+  async baseCleanup() {
+    if (!this.locked) {
+      try {
+        await this.lockfile.unlock(caddyLockFilePath)
+        await unlink(caddyFilePath)
+        await unlink(caddyLockFilePath)
+      }
+      catch (e) {
+        // consola.error(e)
+      }
+    }
   }
 }
