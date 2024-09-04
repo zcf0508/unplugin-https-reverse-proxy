@@ -11,9 +11,8 @@ module.exports = {
   configureWebpack: {
     plugins: [
       Unplugin.default({
-        target: 'test.abc.com',
-        showCaddyLog: true,
-        https: true,
+        enable: true,
+        target: 'test-vuecli-4.abc.com',
       }),
     ],
   },

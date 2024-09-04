@@ -10,9 +10,8 @@ export default defineConfig({
     rspack: {
       plugins: [
         Unplugin({
-          target: 'test.abc.com',
-          showCaddyLog: false,
-          https: false,
+          enable: true,
+          target: 'test-repack.abc.com',
         }),
       ],
     },

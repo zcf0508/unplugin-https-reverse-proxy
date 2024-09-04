@@ -3,8 +3,8 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: [
     ['~/../../../src/nuxt', {
-      target: 'test.abc.com',
-      showCaddyLog: true,
+      enabled: true,
+      target: 'test-nuxt.abc.com',
     }],
   ],
 })

@@ -6,8 +6,9 @@ export default defineConfig({
   plugins: [
     Inspect(),
     Unplugin({
-      target: 'test.abc.com',
-      showCaddyLog: true,
+      enable: true,
+      target: 'test-vite.abc.com',
+      https: true,
     }),
   ],
 })

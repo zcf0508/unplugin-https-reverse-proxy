@@ -16,6 +16,7 @@ function resolvePath(path: string) {
 export const TEMP_DIR = resolvePath(process.env.UHRP_CADDY_PATH || process.env.TEMP || process.env.TMPDIR || '/tmp')
 export const caddyPath = join(TEMP_DIR, `caddy${process.platform === 'win32' ? '.exe' : ''}`)
 export const caddyFilePath = join(TEMP_DIR, 'CADDYFILE')
+export const caddyLockFilePath = join(TEMP_DIR, 'caddylock')
 
 export const supportList = [
   {

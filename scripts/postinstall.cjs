@@ -50,6 +50,7 @@ var import_node_os2 = require("os");
 var import_node_process4 = __toESM(require("process"), 1);
 var import_node_fs2 = require("fs");
 var import_node_child_process3 = require("child_process");
+var import_promises2 = require("fs/promises");
 var import_got_cjs = require("got-cjs");
 var import_http_proxy_agent = require("http-proxy-agent");
 var import_https_proxy_agent = require("https-proxy-agent");
@@ -85,6 +86,7 @@ function resolvePath(path2) {
 var TEMP_DIR = resolvePath(import_node_process3.default.env.UHRP_CADDY_PATH || import_node_process3.default.env.TEMP || import_node_process3.default.env.TMPDIR || "/tmp");
 var caddyPath = (0, import_node_path2.join)(TEMP_DIR, `caddy${import_node_process3.default.platform === "win32" ? ".exe" : ""}`);
 var caddyFilePath = (0, import_node_path2.join)(TEMP_DIR, "CADDYFILE");
+var caddyLockFilePath = (0, import_node_path2.join)(TEMP_DIR, "caddylock");
 var supportList = [
   {
     platform: "dragonfly",

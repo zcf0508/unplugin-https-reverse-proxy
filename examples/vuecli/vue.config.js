@@ -20,8 +20,8 @@ module.exports = defineConfig({
     },
     plugins: [
       Unplugin.default({
-        target: 'test.abc.com',
-        showCaddyLog: true,
+        enable: true,
+        target: 'test-vuecli-5.abc.com',
       }),
     ],
   },

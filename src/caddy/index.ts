@@ -1,14 +1,15 @@
 import { platform } from 'node:os'
 import process from 'node:process'
-import { chmodSync, createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs'
+import { chmodSync, createWriteStream, existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
+import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import kill from 'kill-port'
 import { chmodRecursive, consola, once } from '../utils'
 import { addHost, removeHost } from '../host'
-import { TEMP_DIR, caddyPath, supportList } from './constants'
+import { TEMP_DIR, caddyFilePath, caddyLockFilePath, caddyPath, supportList } from './constants'
 import { logProgress, logProgressOver, tryPort } from './utils'
 
 export async function download() {
@@ -103,10 +104,56 @@ export class CaddyInstant {
   private inited = false
   private stoped = false
 
+  /** has locked */
+  private locked = false
+  private caddyfile: string | undefined
+
+  private lockfile: typeof import('proper-lockfile')
+
   constructor() {
-    testCaddy().then(() => {
+    testCaddy().then(async () => {
+      await this.getCaddyfile()
+
       this.inited = true
     })
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    this.lockfile = require('proper-lockfile')
+
+    this.locked = this.checkLock()
+  }
+
+  checkLock() {
+    if (!existsSync(caddyLockFilePath))
+      writeFileSync(caddyLockFilePath, '')
+    return this.lockfile.checkSync(caddyLockFilePath)
+  }
+
+  async getCaddyfile() {
+    if (!existsSync(caddyFilePath))
+      await this.initCaddyfile()
+
+    this.caddyfile = await readFile(caddyFilePath, 'utf-8')
+  }
+
+  async initCaddyfile() {
+    const contet = `
+{
+  debug
+  auto_https disable_redirects
+}
+    
+`
+    await writeFile(caddyFilePath, contet)
+    this.caddyfile = contet
+  }
+
+  async writeCaddyfile() {
+    return await writeFile(caddyFilePath, this.caddyfile || '')
+  }
+
+  async deleteCaddyfile() {
+    return await unlink(caddyFilePath)
   }
 
   async init() {
@@ -131,109 +178,166 @@ export class CaddyInstant {
     if (!this.inited)
       await this.init()
 
-    if (https && await tryPort(443))
-      await kill(443, 'tcp')
-    if ((process.platform === 'win32' || !https) && await tryPort(80))
-      await kill(80, 'tcp')
-
     if (!await addHost(source.split(':')[0], target.split(':')[0]))
       throw new Error('update host failed')
     consola.success('update host success\n')
 
+    await this.getCaddyfile()
+
+    if (!(this.caddyfile || '').includes(`${target.split(':')[0]}${https ? '' : ':80'}`)) {
+      this.caddyfile = `${this.caddyfile}
+${target.split(':')[0]}${https ? '' : ':80'} {
+  ${https ? 'tls internal' : ''}
+  reverse_proxy http://${source}
+}
+
+`
+
+      await this.writeCaddyfile()
+    }
+    if (!existsSync(caddyLockFilePath))
+      writeFileSync(caddyLockFilePath, '')
+
+    if (!this.locked) {
+      if (https && await tryPort(443))
+        await kill(443, 'tcp')
+      if ((process.platform === 'win32' || !https) && await tryPort(80))
+        await kill(80, 'tcp')
+    }
+
     return new Promise<void>((resolve, reject) => {
-      // caddy reverse-proxy --from target --to source --internal-certs
-      const child = process.platform !== 'win32'
-        ? spawn('sudo', ['-E', caddyPath, 'reverse-proxy', '--from', `${target.split(':')[0]}${https ? '' : ':80'}`, '--to', `${source}`, '--internal-certs', '--insecure', '--disable-redirects'])
-        : spawn(caddyPath, ['reverse-proxy', '--from', `${target.split(':')[0]}`, '--to', `${source}`, '--internal-certs'])
+      const setupCleanup = () => {
+        process.on('SIGINT', async () => {
+          if (!restore || this.stoped)
+            return
 
-      child.on('error', (err) => {
-        return reject(err)
-      })
-
-      child.stderr.on('data', (data) => {
-        const lines = (data.toString() as string).split('\n').map(line => line.trim())
-        for (const line of lines) {
-          // caddy log
-          // eslint-disable-next-line no-console
-          showCaddyLog && line && console.info(line)
-          if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
-            consola.error(line)
-            // child.kill()
-            return reject(line)
+          if (!this.locked) {
+            try {
+              await this.lockfile.unlock(caddyLockFilePath)
+              await unlink(caddyFilePath)
+              await unlink(caddyLockFilePath)
+            }
+            catch (e) {
+              // consola.error(e)
+            }
           }
-          if (line.includes('caddy proxying'))
-            return resolve()
+
+          try {
+            if (await removeHost(source.split(':')[0], target.split(':')[0]))
+              consola.success('Restore host success.\n')
+
+            else
+              consola.fail('Restore host failed.\n')
+          }
+          catch (e) {
+            consola.error(e)
+            consola.fail('Restore host failed.\n')
+          }
+          finally {
+            this.stoped = true
+            process.nextTick(() => {
+              process.exit()
+            })
+          }
+        })
+
+        const originalExit = process.exit.bind(process)
+
+        // @ts-expect-error override
+        process.exit = async (code?: number) => {
+          const port = Number(source.split(':')[1])
+          if (!Number.isNaN(port) && await tryPort(port))
+            await kill(port, 'tcp')
+
+          // fix `Error: EPERM: operation not permitted`
+          const pwd = process.cwd()
+          const viteCacheDir = `${pwd}/node_modules/.vite`
+          if (existsSync(viteCacheDir))
+            chmodRecursive(viteCacheDir, 0o777)
+          const nuxtCacheDir = `${pwd}/.nuxt`
+          if (existsSync(nuxtCacheDir))
+            await chmodRecursive(nuxtCacheDir, 0o777)
+          const webpackCacheDir = `${pwd}/node_modules/.cache`
+          if (existsSync(webpackCacheDir))
+            chmodRecursive(webpackCacheDir, 0o777)
+
+          if (!restore || this.stoped)
+            return originalExit(code)
+
+          if (!this.locked) {
+            try {
+              await this.lockfile.unlock(caddyLockFilePath)
+              await unlink(caddyFilePath)
+              await unlink(caddyLockFilePath)
+            }
+            catch (e) {
+              // consola.error(e)
+            }
+          }
+
+          try {
+            if (await removeHost(source.split(':')[0], target.split(':')[0]))
+              consola.success('Restore host success.\n')
+
+            else
+              consola.fail('Restore host failed.\n')
+          }
+          catch (e) {
+            consola.error(e)
+            consola.fail('Restore host failed.\n')
+          }
+          finally {
+            this.stoped = true
+            process.nextTick(() => {
+              originalExit(code)
+            })
+          }
         }
-      })
+      }
 
-      child.stdout.on('data', (_data) => {
-        consola.info(_data.toString())
-        resolve()
-      })
+      if (!this.locked) {
+        const child = process.platform !== 'win32'
+          ? spawn('sudo', ['-E', caddyPath, 'run', '--config', caddyFilePath, '--watch'])
+          : spawn(caddyPath, ['run', '--config', caddyFilePath, '--watch'])
 
-      process.on('SIGINT', async () => {
-        if (!restore || this.stoped)
-          return
+        this.lockfile.lockSync(caddyLockFilePath)
 
-        try {
-          if (await removeHost(source.split(':')[0], target.split(':')[0]))
-            consola.success('restore host success\n')
+        child.on('error', (err) => {
+          return reject(err)
+        })
 
-          else
-            consola.fail('restore host failed\n')
-        }
-        catch (e) {
-          consola.error(e)
-          consola.fail('restore host failed\n')
-        }
-        finally {
-          this.stoped = true
-          process.nextTick(() => {
-            process.exit()
-          })
-        }
-      })
+        child.stderr.on('data', (data) => {
+          const lines = (data.toString() as string).split('\n').map(line => line.trim())
+          for (const line of lines) {
+            // caddy log
+            // eslint-disable-next-line no-console
+            showCaddyLog && line && console.info(line)
+            if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
+              consola.error(`${line}\n`)
+              // child.kill()
+              return reject(line)
+            }
+            if (line.includes('config file changed'))
+              consola.success('Detect added a new reverse proxy config, restarted.\n')
 
-      const originalExit = process.exit.bind(process)
+            if (line.includes('caddy proxying') || line.includes('serving initial'))
+              return resolve()
+          }
+        })
 
-      // @ts-expect-error override
-      process.exit = async (code?: number) => {
-        const port = Number(source.split(':')[1])
-        if (!Number.isNaN(port) && await tryPort(port))
-          await kill(port, 'tcp')
+        child.stdout.on('data', (_data) => {
+          consola.info(_data.toString())
+          resolve()
+        })
 
-        // fix `Error: EPERM: operation not permitted`
-        const pwd = process.cwd()
-        const viteCacheDir = `${pwd}/node_modules/.vite`
-        if (existsSync(viteCacheDir))
-          chmodRecursive(viteCacheDir, 0o777)
-        const nuxtCacheDir = `${pwd}/.nuxt`
-        if (existsSync(nuxtCacheDir))
-          await chmodRecursive(nuxtCacheDir, 0o777)
-        const webpackCacheDir = `${pwd}/node_modules/.cache`
-        if (existsSync(webpackCacheDir))
-          chmodRecursive(webpackCacheDir, 0o777)
+        setupCleanup()
+      }
+      else {
+        consola.info('Caddy is running in another process.')
 
-        if (!restore || this.stoped)
-          return originalExit(code)
+        setupCleanup()
 
-        try {
-          if (await removeHost(source.split(':')[0], target.split(':')[0]))
-            consola.success('restore host success\n')
-
-          else
-            consola.fail('restore host failed\n')
-        }
-        catch (e) {
-          consola.error(e)
-          consola.fail('restore host failed\n')
-        }
-        finally {
-          this.stoped = true
-          process.nextTick(() => {
-            originalExit(code)
-          })
-        }
+        return resolve()
       }
     })
   }
