@@ -92,7 +92,7 @@
     "prepublishOnly": "npm run build",
     "release": "bumpp",
     "start": "tsx src/index.ts",
-    "test": "vitest"
+    "test": "UHRP_CADDY_PATH='./test/.uhrp' vitest"
   },
   "peerDependencies": {
     "@nuxt/kit": "^3",
@@ -164,7 +164,7 @@
     "tsup": "^7.3.0",
     "typescript": "^5.3.3",
     "vite": "^4.5.2",
-    "vitest": "^0.34.6",
+    "vitest": "^2.0.5",
     "webpack": "^5.90.3"
   }
 }
