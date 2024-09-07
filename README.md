@@ -220,7 +220,17 @@ export default defineNuxtConfig({
 })
 ```
 
-> This module works for both Nuxt 2 and [Nuxt Vite](https://github.com/nuxt/vite)
+**!important:** You need to update the `nuxt dev` script by adding `--fork=false` to enable host restoration.
+
+```json
+// package.json
+
+{
+  "scripts": {
+    "dev": "nuxt dev --fork=false"
+  }
+}
+```
 
 <br></details>
 
