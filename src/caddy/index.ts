@@ -108,7 +108,10 @@ export class CaddyInstant {
   private locked = false
   private caddyfile: string | undefined
 
-  private caddyChild: ReturnType<typeof spawn> | undefined
+  private _caddyChild: ReturnType<typeof spawn> | undefined
+
+  private _source: string | undefined
+  private _target: string | undefined
 
   constructor() {
     testCaddy().then(async () => {
@@ -173,6 +176,9 @@ export class CaddyInstant {
       https = false,
     } = options || {}
 
+    this._source = source
+    this._target = target
+
     if (!this.inited)
       await this.init()
 
@@ -206,21 +212,13 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
     return new Promise<void>((resolve, reject) => {
       const setupCleanup = () => {
         process.on('SIGINT', async () => {
-          if (!restore || this.stoped)
+          if (this.stoped)
             return
 
-          await this.baseCleanup()
+          process.stdin.resume()
 
           try {
-            if (await removeHost(source.split(':')[0], target.split(':')[0]))
-              consola.success('Restore host success.\n')
-
-            else
-              consola.fail('Restore host failed.\n')
-          }
-          catch (e) {
-            consola.error(e)
-            consola.fail('Restore host failed.\n')
+            await this.baseCleanup(restore)
           }
           finally {
             this.stoped = true
@@ -242,30 +240,23 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
           const pwd = process.cwd()
           const viteCacheDir = `${pwd}/node_modules/.vite`
           if (existsSync(viteCacheDir))
-            chmodRecursive(viteCacheDir, 0o777)
+            await chmodRecursive(viteCacheDir, 0o777).catch(() => { })
           const nuxtCacheDir = `${pwd}/.nuxt`
           if (existsSync(nuxtCacheDir))
-            await chmodRecursive(nuxtCacheDir, 0o777)
+            await chmodRecursive(nuxtCacheDir, 0o777).catch(() => { })
           const webpackCacheDir = `${pwd}/node_modules/.cache`
           if (existsSync(webpackCacheDir))
-            chmodRecursive(webpackCacheDir, 0o777)
+            await chmodRecursive(webpackCacheDir, 0o777).catch(() => { })
 
-          if (!restore || this.stoped)
+          if (this.stoped)
             return originalExit(code)
 
-          await this.baseCleanup()
+          process.stdin.resume()
 
           try {
-            if (await removeHost(source.split(':')[0], target.split(':')[0]))
-              consola.success('Restore host success.\n')
+            await this.baseCleanup()
+          }
 
-            else
-              consola.fail('Restore host failed.\n')
-          }
-          catch (e) {
-            consola.error(e)
-            consola.fail('Restore host failed.\n')
-          }
           finally {
             this.stoped = true
             process.nextTick(() => {
@@ -276,17 +267,17 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
       }
 
       if (!this.locked) {
-        this.caddyChild = process.platform !== 'win32'
+        this._caddyChild = process.platform !== 'win32'
           ? spawn('sudo', ['-E', caddyPath, 'run', '--config', caddyFilePath, '--watch'])
           : spawn(caddyPath, ['run', '--config', caddyFilePath, '--watch'])
 
         lockfile.lockSync(caddyLockFilePath)
 
-        this.caddyChild!.on('error', (err) => {
+        this._caddyChild!.on('error', (err) => {
           return reject(err)
         })
 
-        this.caddyChild!.stderr?.on('data', (data) => {
+        this._caddyChild!.stderr?.on('data', (data) => {
           const lines = (data.toString() as string).split('\n').map(line => line.trim())
           for (const line of lines) {
             // caddy log
@@ -305,7 +296,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
           }
         })
 
-        this.caddyChild!.stdout?.on('data', (_data) => {
+        this._caddyChild!.stdout?.on('data', (_data) => {
           consola.info(_data.toString())
           resolve()
         })
@@ -322,16 +313,29 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
     })
   }
 
-  async baseCleanup() {
-    if (!this.locked) {
-      this.caddyChild?.kill()
+  async baseCleanup(restore: boolean = true) {
+    try {
+      if (restore && this._source && this._target) {
+        if (await removeHost(this._source.split(':')[0], this._target.split(':')[0]))
+          consola.success('Restore host success.\n')
+
+        else
+          consola.fail('Restore host failed.\n')
+      }
+    }
+    catch (e) {
+      consola.error(e)
+      consola.fail('Restore host failed.\n')
+    }
+    if (!this.locked && !this.stoped) {
+      this._caddyChild?.kill()
       try {
-        await lockfile.unlock(caddyLockFilePath)
-        await unlink(caddyFilePath)
-        await unlink(caddyLockFilePath)
+        await lockfile.unlock(caddyLockFilePath).catch(() => { })
+        await unlink(caddyFilePath).catch(() => { })
+        await unlink(caddyLockFilePath).catch(() => { })
       }
       catch (e) {
-        // consola.error(e)
+        consola.error(e)
       }
     }
   }
