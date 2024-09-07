@@ -49,27 +49,21 @@ function once(fn) {
 var import_node_os2 = require("os");
 var import_node_process4 = __toESM(require("process"), 1);
 var import_node_fs2 = require("fs");
-var import_node_child_process3 = require("child_process");
+var import_node_child_process4 = require("child_process");
 var import_promises2 = require("fs/promises");
 var import_got_cjs = require("got-cjs");
 var import_http_proxy_agent = require("http-proxy-agent");
 var import_https_proxy_agent = require("https-proxy-agent");
-var import_kill_port = __toESM(require("kill-port"), 1);
 var lockfile = __toESM(require("proper-lockfile"), 1);
 
 // src/host/index.ts
 var import_node_process2 = __toESM(require("process"), 1);
 var import_node_child_process2 = require("child_process");
 var import_node_fs = require("fs");
-var import_hosts_so_easy = __toESM(require("hosts-so-easy"), 1);
-var Hosts = import_hosts_so_easy.default.default || import_hosts_so_easy.default;
-var hostInstance = new Hosts({
-  debounceTime: 50,
-  hostsFile: getPathOfSystemHostsPath()
-});
-function getPathOfSystemHostsPath() {
-  return import_node_process2.default.platform === "win32" ? `${import_node_process2.default.env.windir || "C:\\WINDOWS"}\\system32\\drivers\\etc\\hosts` : "/etc/hosts";
-}
+var import_node_util = require("util");
+var import_hostile = __toESM(require("hostile"), 1);
+var _setHost = (0, import_node_util.promisify)(import_hostile.default.set);
+var _removeHost = (0, import_node_util.promisify)(import_hostile.default.remove);
 
 // src/caddy/constants.ts
 var import_node_path2 = require("path");
@@ -201,6 +195,7 @@ var supportList = [
 
 // src/caddy/utils.ts
 var import_node_net = require("net");
+var import_node_child_process3 = require("child_process");
 var import_ora = __toESM(require("ora"), 1);
 var spinner;
 function getNumber(number) {
@@ -286,7 +281,7 @@ function testCaddy() {
     if (!(0, import_node_fs2.existsSync)(caddyPath))
       return resolve(false);
     (0, import_node_fs2.chmodSync)(caddyPath, 511);
-    const child = import_node_process4.default.platform === "win32" ? (0, import_node_child_process3.spawn)(caddyPath, []) : (0, import_node_child_process3.spawn)("sudo", ["-E", caddyPath]);
+    const child = import_node_process4.default.platform === "win32" ? (0, import_node_child_process4.spawn)(caddyPath, []) : (0, import_node_child_process4.spawn)("sudo", ["-E", caddyPath]);
     child.on("close", () => {
       return resolve(false);
     });

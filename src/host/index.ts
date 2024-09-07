@@ -1,17 +1,13 @@
 import process from 'node:process'
 import { exec } from 'node:child_process'
 import { chmodSync } from 'node:fs'
+import { promisify } from 'node:util'
 
-// @ts-expect-error no type
-import _Hosts from 'hosts-so-easy'
+import hostile from 'hostile'
 import { consola } from '../utils'
 
-const Hosts = _Hosts.default || _Hosts
-
-const hostInstance = new Hosts({
-  debounceTime: 50,
-  hostsFile: getPathOfSystemHostsPath(),
-})
+const _setHost = promisify(hostile.set)
+const _removeHost = promisify(hostile.remove)
 
 function getPathOfSystemHostsPath() {
   return process.platform === 'win32'
@@ -38,20 +34,18 @@ async function syncHost() {
 export async function addHost(ip: string, host: string) {
   if (process.platform !== 'win32')
     chmodSync(getPathOfSystemHostsPath(), 0o777)
-  hostInstance.add('127.0.0.1', 'localhost')
-  hostInstance.add(ip, host)
+  await _setHost('127.0.0.1', 'localhost')
+  await _setHost(ip, host)
   if (ip === 'localhost')
-    hostInstance.add('127.0.0.1', host)
-  await hostInstance.updateFinish()
+    await _setHost('127.0.0.1', host)
   return await syncHost()
 }
 
 export async function removeHost(ip: string, host: string) {
   if (process.platform !== 'win32')
     chmodSync(getPathOfSystemHostsPath(), 0o777)
-  hostInstance.remove(ip, host)
+  await _removeHost(ip, host)
   if (ip === 'localhost')
-    hostInstance.remove('127.0.0.1', host)
-  await hostInstance.updateFinish()
+    await _removeHost('127.0.0.1', host)
   return await syncHost()
 }

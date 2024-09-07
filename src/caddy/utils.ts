@@ -1,4 +1,5 @@
 import { createServer } from 'node:net'
+import { exec } from 'node:child_process'
 import ora from 'ora'
 import { consola } from '../utils'
 
@@ -25,6 +26,23 @@ export function tryPort(port: number) {
     catch (e) {
       resolve(true)
     }
+  })
+}
+
+/**
+ * npx free-port :port
+ */
+export async function kill(port: number) {
+  return new Promise<void>((resolve, reject) => {
+    exec(`npx @maxbo/free-port ${port} -s`, (err, stdout, stderr) => {
+      if (err) {
+        reject(err)
+      }
+      else {
+        consola.log(stdout)
+        resolve()
+      }
+    })
   })
 }
 

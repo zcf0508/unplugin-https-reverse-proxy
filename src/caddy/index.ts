@@ -6,12 +6,11 @@ import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
-import kill from 'kill-port'
 import * as lockfile from 'proper-lockfile'
 import { chmodRecursive, consola, once } from '../utils'
 import { addHost, removeHost } from '../host'
 import { TEMP_DIR, caddyFilePath, caddyLockFilePath, caddyPath, supportList } from './constants'
-import { logProgress, logProgressOver, tryPort } from './utils'
+import { kill, logProgress, logProgressOver, tryPort } from './utils'
 
 export async function download() {
   if (await testCaddy())
@@ -109,6 +108,8 @@ export class CaddyInstant {
   private locked = false
   private caddyfile: string | undefined
 
+  private caddyChild: ReturnType<typeof spawn> | undefined
+
   constructor() {
     testCaddy().then(async () => {
       await this.getCaddyfile()
@@ -197,9 +198,9 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
 
     if (!this.locked) {
       if (await tryPort(443))
-        await kill(443, 'tcp')
+        await kill(443)
       if ((process.platform === 'win32' || !https) && await tryPort(80))
-        await kill(80, 'tcp')
+        await kill(80)
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -235,7 +236,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
         process.exit = async (code?: number) => {
           const port = Number(source.split(':')[1])
           if (!Number.isNaN(port) && await tryPort(port))
-            await kill(port, 'tcp')
+            await kill(port)
 
           // fix `Error: EPERM: operation not permitted`
           const pwd = process.cwd()
@@ -275,17 +276,17 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
       }
 
       if (!this.locked) {
-        const child = process.platform !== 'win32'
+        this.caddyChild = process.platform !== 'win32'
           ? spawn('sudo', ['-E', caddyPath, 'run', '--config', caddyFilePath, '--watch'])
           : spawn(caddyPath, ['run', '--config', caddyFilePath, '--watch'])
 
         lockfile.lockSync(caddyLockFilePath)
 
-        child.on('error', (err) => {
+        this.caddyChild!.on('error', (err) => {
           return reject(err)
         })
 
-        child.stderr.on('data', (data) => {
+        this.caddyChild!.stderr?.on('data', (data) => {
           const lines = (data.toString() as string).split('\n').map(line => line.trim())
           for (const line of lines) {
             // caddy log
@@ -304,7 +305,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
           }
         })
 
-        child.stdout.on('data', (_data) => {
+        this.caddyChild!.stdout?.on('data', (_data) => {
           consola.info(_data.toString())
           resolve()
         })
@@ -323,6 +324,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
 
   async baseCleanup() {
     if (!this.locked) {
+      this.caddyChild?.kill()
       try {
         await lockfile.unlock(caddyLockFilePath)
         await unlink(caddyFilePath)
