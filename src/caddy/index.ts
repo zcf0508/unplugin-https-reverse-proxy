@@ -192,7 +192,23 @@ export class CaddyInstant {
       this.caddyfile = `${this.caddyfile}
 ${target.split(':')[0]}${https ? '' : ':80'} {
   ${https ? 'tls internal' : ''}
-  reverse_proxy http://${source}
+  reverse_proxy http://${source} {
+    health_uri /
+    health_interval 2s
+    health_timeout 5s
+    fail_duration 2s
+    unhealthy_status 502 503 504 404
+    lb_try_duration 3s
+    lb_try_interval 300ms
+
+    @error status 502 503 504 404
+    handle_response @error {
+      respond * 503 {
+        body "Service Unavailable"
+        close
+      }
+    }
+  }
 }
 
 `
