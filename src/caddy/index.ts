@@ -293,16 +293,23 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
           return reject(err)
         })
 
-        this._caddyChild!.stderr?.on('data', (data) => {
+        this._caddyChild!.stderr?.on('data', async (data) => {
           const lines = (data.toString() as string).split('\n').map(line => line.trim())
           for (const line of lines) {
             // caddy log
             // eslint-disable-next-line no-console
             showCaddyLog && line && console.info(line)
             if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
-              consola.error(`${line}\n`)
-              // child.kill()
-              return reject(line)
+              if (line.includes('parsing caddyfile tokens')) {
+                consola.error('Caddyfile syntax error, please contact the author:\n', `${this.caddyfile}\n\n${line}\n`)
+                await this.baseCleanup()
+                process.exit()
+              }
+              else {
+                consola.error(`${line}\n`)
+                // child.kill()
+                return reject(line)
+              }
             }
             if (line.includes('config file changed'))
               consola.success('Detect added a new reverse proxy config, restarted.\n')
