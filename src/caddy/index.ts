@@ -187,19 +187,23 @@ export class CaddyInstant {
     consola.success('update host success\n')
 
     await this.getCaddyfile()
-
     if (!(this.caddyfile || '').includes(`${target.split(':')[0]}${https ? '' : ':80'}`)) {
       this.caddyfile = `${this.caddyfile}
 ${target.split(':')[0]}${https ? '' : ':80'} {
   ${https ? 'tls internal' : ''}
   reverse_proxy http://${source} {
-    health_uri /
+    health_uri ${base}
     health_interval 2s
     health_timeout 5s
     fail_duration 2s
     unhealthy_status 502 503 504 404
     lb_try_duration 3s
     lb_try_interval 300ms
+    health_headers {
+      Accept text/html
+      Accept-Encoding gzip, deflate, br
+      User-Agent Caddy-Health-Check
+    }
 
     @error status 502 503 504 404
     handle_response @error {
