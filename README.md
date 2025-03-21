@@ -6,14 +6,12 @@ A plugin for https reverse proxy, support `vite`、`webpack` and `rspack`.
 
 ## Install
 
-
 Support set caddy file path by environment variable `UHRP_CADDY_PATH`, default is system cache folder.
 
 ```env
 #.env.local
 UHRP_CADDY_PATH=~/tmp/.uhrp
 ```
-
 
 ```bash
 # not auto install caddy when postinstall

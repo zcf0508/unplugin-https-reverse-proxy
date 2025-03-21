@@ -1,9 +1,9 @@
+import type { Options } from './types'
 import process from 'node:process'
 import { defineNuxtModule } from '@nuxt/kit'
-import type { Options } from './types'
-import '@nuxt/schema'
-import { consola, isAdmin } from './utils'
 import { vitePrintUrls } from '.'
+import { consola, isAdmin } from './utils'
+import '@nuxt/schema'
 
 export interface ModuleOptions extends Options {
 

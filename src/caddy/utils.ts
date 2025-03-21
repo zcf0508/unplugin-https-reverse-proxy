@@ -1,5 +1,5 @@
-import { createServer } from 'node:net'
 import { exec } from 'node:child_process'
+import { createServer } from 'node:net'
 import ora from 'ora'
 import { consola } from '../utils'
 
@@ -8,8 +8,8 @@ let spinner: ora.Ora
 /**
  * @returns whether the port is in use
  */
-export function tryPort(port: number) {
-  return new Promise<boolean>((resolve, reject) => {
+export function tryPort(port: number): Promise<boolean> {
+  return new Promise<boolean>((resolve, _reject) => {
     try {
       const server = createServer().listen(port)
       server.on('listening', () => {
@@ -23,7 +23,7 @@ export function tryPort(port: number) {
         server.close()
       })
     }
-    catch (e) {
+    catch {
       resolve(true)
     }
   })
@@ -32,9 +32,9 @@ export function tryPort(port: number) {
 /**
  * npx free-port :port
  */
-export async function kill(port: number) {
+export async function kill(port: number): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    exec(`npx @maxbo/free-port ${port} -s`, (err, stdout, stderr) => {
+    exec(`npx @maxbo/free-port ${port} -s`, (err, stdout, _stderr) => {
       if (err) {
         reject(err)
       }
@@ -46,7 +46,7 @@ export async function kill(port: number) {
   })
 }
 
-function getNumber(number: number) {
+function getNumber(number: number): string {
   if (number <= 0)
     return '0%'
   else if (number < 100)
@@ -55,7 +55,7 @@ function getNumber(number: number) {
     return '100%'
 }
 
-export function logProgress(percent: number | string) {
+export function logProgress(percent: number | string): void {
   if (!spinner) {
     // empty a line before start
     consola.log('')
@@ -68,7 +68,7 @@ export function logProgress(percent: number | string) {
   else { spinner.text = `Download Caddy: ${getNumber(Number(percent) * 100)}` }
 }
 
-export function logProgressOver() {
+export function logProgressOver(): void {
   if (!spinner) {
     spinner = ora({
       text: 'Start Download Caddy: 100%',

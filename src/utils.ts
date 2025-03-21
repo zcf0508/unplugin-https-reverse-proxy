@@ -1,14 +1,14 @@
-import process from 'node:process'
-import path from 'node:path'
-import { chmod, readdir, stat } from 'node:fs/promises'
 import { execSync } from 'node:child_process'
+import { chmod, readdir, stat } from 'node:fs/promises'
+import path from 'node:path'
+import process from 'node:process'
 import { createConsola } from 'consola'
 
 export const consola = createConsola({
   level: 3,
 }).withTag('reverse-proxy')
 
-export async function chmodRecursive(_path: string, mode: number) {
+export async function chmodRecursive(_path: string, mode: number): Promise<void> {
   await chmod(_path, mode)
   if ((await stat(_path)).isDirectory()) {
     const children = await readdir(_path)
@@ -27,7 +27,7 @@ export function once<T extends (...args: any[]) => any>(fn: T): (...args: Parame
   }
 }
 
-export function isAdmin() {
+export function isAdmin(): boolean {
   if (process.platform === 'win32') {
     try {
       execSync('net session', { stdio: 'ignore' })
@@ -38,6 +38,6 @@ export function isAdmin() {
     }
   }
   else {
-    return process.getuid && process.getuid() === 0
+    return !!(process.getuid && process.getuid() === 0)
   }
 }

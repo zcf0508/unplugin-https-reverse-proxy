@@ -1,18 +1,18 @@
+import { spawn } from 'node:child_process'
+import { chmodSync, createWriteStream, existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { platform } from 'node:os'
 import process from 'node:process'
-import { chmodSync, createWriteStream, existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
-import { spawn } from 'node:child_process'
-import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import * as lockfile from 'proper-lockfile'
-import { chmodRecursive, consola, once } from '../utils'
 import { addHost, removeHost } from '../host'
-import { TEMP_DIR, caddyFilePath, caddyLockFilePath, caddyPath, supportList } from './constants'
+import { chmodRecursive, consola, once } from '../utils'
+import { caddyFilePath, caddyLockFilePath, caddyPath, supportList, TEMP_DIR } from './constants'
 import { kill, logProgress, logProgressOver, tryPort } from './utils'
 
-export async function download() {
+export async function download(): Promise<string> {
   if (await testCaddy())
     return caddyPath
 
@@ -75,7 +75,7 @@ export async function download() {
   })
 }
 
-function testCaddy() {
+function testCaddy(): Promise<boolean> {
   return new Promise((resolve, reject) => {
     if (!existsSync(caddyPath))
       return resolve(false)
@@ -123,13 +123,13 @@ export class CaddyInstant {
     this.locked = this.checkLock()
   }
 
-  checkLock() {
+  checkLock(): boolean {
     if (!existsSync(caddyLockFilePath))
       writeFileSync(caddyLockFilePath, '')
     return lockfile.checkSync(caddyLockFilePath)
   }
 
-  async getCaddyfile() {
+  async getCaddyfile(): Promise<string> {
     if (!existsSync(caddyFilePath))
       await this.initCaddyfile()
 
@@ -137,7 +137,7 @@ export class CaddyInstant {
     return this.caddyfile
   }
 
-  async initCaddyfile() {
+  async initCaddyfile(): Promise<void> {
     const contet = `
 {
   debug
@@ -149,15 +149,15 @@ export class CaddyInstant {
     this.caddyfile = contet
   }
 
-  async writeCaddyfile() {
+  async writeCaddyfile(): Promise<void> {
     return await writeFile(caddyFilePath, this.caddyfile || '')
   }
 
-  async deleteCaddyfile() {
+  async deleteCaddyfile(): Promise<void> {
     return await unlink(caddyFilePath)
   }
 
-  async init() {
+  async init(): Promise<void> {
     await download()
     this.inited = true
   }
@@ -165,9 +165,8 @@ export class CaddyInstant {
   /**
    * @param source like `127.0.0.1:8080`
    * @param target like `test.abc.com`. And if you provide a port ,it will be ignore.
-   * @returns
    */
-  async run(source: string, target: string, options?: Partial<RunOptions>) {
+  async run(source: string, target: string, options?: Partial<RunOptions>): Promise<void> {
     source = source.replace('0.0.0.0', '127.0.0.1')
     const {
       restore = true,
@@ -230,7 +229,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
     }
 
     return new Promise<void>((resolve, reject) => {
-      const setupCleanup = () => {
+      const setupCleanup = (): void => {
         process.on('SIGINT', async () => {
           if (this.stoped)
             return
@@ -340,7 +339,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
     })
   }
 
-  async baseCleanup(restore: boolean = true) {
+  async baseCleanup(restore: boolean = true): Promise<void> {
     try {
       if (restore && this._source && this._target) {
         if (await removeHost(this._source.split(':')[0], this._target.split(':')[0]))

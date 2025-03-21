@@ -1,13 +1,13 @@
 {
   "compilerOptions": {
     "target": "es2017",
-    "module": "esnext",
     "lib": ["esnext", "DOM"],
+    "module": "esnext",
     "moduleResolution": "node",
-    "esModuleInterop": true,
+    "resolveJsonModule": true,
     "strict": true,
     "strictNullChecks": true,
-    "resolveJsonModule": true
+    "esModuleInterop": true
   },
-  "exclude": ["node_modules", "examples/vuecli4"]
+  "exclude": ["node_modules", "eslint.config.js", "examples/vuecli4"]
 }

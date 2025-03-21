@@ -1,8 +1,8 @@
 import { existsSync, unlinkSync } from 'node:fs'
 import process from 'node:process'
-import { consola } from '../src/utils'
 import { download } from '../src/caddy'
 import { caddyPath } from '../src/caddy/constants'
+import { consola } from '../src/utils'
 
 async function run() {
   try {

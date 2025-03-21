@@ -1,5 +1,5 @@
-import { join } from 'node:path'
 import os from 'node:os'
+import { join } from 'node:path'
 import process from 'node:process'
 import dotenvFlow from 'dotenv-flow'
 
@@ -7,7 +7,7 @@ dotenvFlow.config({
   silent: true,
 })
 
-function resolvePath(path: string) {
+function resolvePath(path: string): string {
   if (path.startsWith('~'))
     return join(os.homedir() || '', path.slice(1))
   return path

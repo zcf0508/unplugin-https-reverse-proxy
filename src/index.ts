@@ -1,17 +1,21 @@
-import process from 'node:process'
 import type { UnpluginFactory } from 'unplugin'
-import { createUnplugin } from 'unplugin'
 import type { ResolvedConfig } from 'vite'
-import c from 'picocolors'
-import { consola, isAdmin, once } from './utils'
 import type { Options } from './types'
+import process from 'node:process'
+import c from 'picocolors'
+import { createUnplugin } from 'unplugin'
 import { CaddyInstant } from './caddy'
+import { consola, isAdmin, once } from './utils'
 
 let config: ResolvedConfig
 
 let caddy: CaddyInstant
 
 const cwd = process.cwd()
+
+function colorUrl(url: string): string {
+  return c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
+}
 
 export const vitePrintUrls = once((
   options: Options,
@@ -29,7 +33,6 @@ export const vitePrintUrls = once((
     base,
     ...options,
   }).then(() => {
-    const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
     consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
   }).catch((e) => {
     throw e
@@ -131,8 +134,6 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     caddy.run(source, target, {
       ...options,
     }).then(() => {
-      const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
-
       compiler.hooks.done.tap('unplugin-https-reverse-proxy', () => {
         consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}`)}`)
       })
@@ -181,8 +182,6 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     caddy.run(source, target, {
       ...options,
     }).then(() => {
-      const colorUrl = (url: string) => c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
-
       consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}`)}`)
     }).catch((e) => {
       throw e

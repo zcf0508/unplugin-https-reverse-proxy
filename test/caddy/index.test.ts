@@ -2,9 +2,9 @@ import { existsSync } from 'node:fs'
 import { unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { beforeAll, beforeEach, describe, expect, it, test } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { CaddyInstant, download } from '../../src/caddy'
-import { TEMP_DIR, caddyPath } from '../../src/caddy/constants'
+import { caddyPath, TEMP_DIR } from '../../src/caddy/constants'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const baseTestUrl = resolve(__dirname, '../')
@@ -30,7 +30,7 @@ describe('caddy', () => {
         await unlink(resolve(baseUrl, 'caddylock'))
     })
 
-    test.sequential(':80', async () => {
+    it.sequential(':80', async () => {
       const caddy = new CaddyInstant()
       expect(caddy.checkLock()).toBe(false)
       await caddy.run('127.0.0.1:8080', 'test-1.abc.com')
@@ -78,7 +78,7 @@ describe('caddy', () => {
       await caddy.baseCleanup()
     })
 
-    test.sequential(':443', async () => {
+    it.sequential(':443', async () => {
       const caddy = new CaddyInstant()
       expect(caddy.checkLock()).toBe(false)
       await caddy.run('127.0.0.1:8080', 'test-2.abc.com', {
@@ -127,7 +127,7 @@ describe('caddy', () => {
       await caddy.baseCleanup()
     })
 
-    test.sequential('both', async () => {
+    it.sequential('both', async () => {
       const caddy_80 = new CaddyInstant()
       expect(caddy_80.checkLock()).toBe(false)
       await caddy_80.run('127.0.0.1:8080', 'test-3.abc.com')
@@ -249,7 +249,7 @@ describe('caddy', () => {
       await caddy_80.baseCleanup()
     })
 
-    test.sequential(':443 with base', async () => {
+    it.sequential(':443 with base', async () => {
       const caddy = new CaddyInstant()
       expect(caddy.checkLock()).toBe(false)
       await caddy.run('127.0.0.1:8080', 'test-2.abc.com', {
