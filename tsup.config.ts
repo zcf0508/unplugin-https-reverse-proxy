@@ -22,6 +22,6 @@ export default [
     outDir: 'scripts',
     format: ['cjs'],
     onSuccess: 'npm run build:fix',
-    external: ['proper-lockfile', 'unplugin-https-reverse-proxy'],
+    external: ['proper-lockfile'],
   },
 ] satisfies Options[]

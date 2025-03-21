@@ -7,10 +7,7 @@
     "esModuleInterop": true,
     "strict": true,
     "strictNullChecks": true,
-    "resolveJsonModule": true,
-    "paths": {
-      "unplugin-https-reverse-proxy": ["./src"]
-    }
+    "resolveJsonModule": true
   },
   "exclude": ["node_modules", "examples/vuecli4"]
 }

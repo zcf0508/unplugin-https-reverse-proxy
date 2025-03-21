@@ -1,6 +1,8 @@
 import { existsSync, unlinkSync } from 'node:fs'
 import process from 'node:process'
-import { caddyPath, consola, download } from 'unplugin-https-reverse-proxy'
+import { consola } from '../src/utils'
+import { download } from '../src/caddy'
+import { caddyPath } from '../src/caddy/constants'
 
 async function run() {
   try {
