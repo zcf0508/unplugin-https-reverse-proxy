@@ -193,3 +193,7 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 export const unplugin = /* #__PURE__ */ createUnplugin(unpluginFactory)
 
 export default unplugin
+
+export { consola }
+export { download } from './caddy'
+export { caddyPath } from './caddy/constants'
