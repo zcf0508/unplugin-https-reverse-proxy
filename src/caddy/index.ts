@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { chmodSync, createWriteStream, existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { platform } from 'node:os'
+import { join } from 'node:path'
 import process from 'node:process'
 import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
@@ -38,7 +39,7 @@ export async function download(): Promise<string> {
     if (!support)
       return reject(new Error('not support'))
 
-    const dowmloadLink = `https://caddyserver.com/api/download?os=${support.platform}&arch=${support.arch}`
+    const dowmloadLink = `https://caddyserver.com/api/download?os=${support.platform}&arch=${support.arch}&p=github.com%2Fcaddyserver%2Fforwardproxy`
 
     existsSync(caddyPath) && unlinkSync(caddyPath)
 
@@ -143,7 +144,7 @@ export class CaddyInstant {
   debug
   auto_https disable_redirects
 }
-    
+
 `
     await writeFile(caddyFilePath, contet)
     this.caddyfile = contet
@@ -214,6 +215,28 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
   }
 }
 
+:7601 {
+  root * "${join(
+    process.platform === 'win32'
+      ? `${process.env.AppData!}/Caddy`
+      : `${process.env.HOME!}/Library/Application Support/Caddy`,
+    './pki/authorities/local',
+  )}"
+  file_server browse
+}
+
+# 正向代理配置
+:7600 {
+  bind 0.0.0.0
+  
+  forward_proxy {
+    hide_ip
+    hide_via
+    acl {
+      allow all
+    }
+  }
+}
 `
 
       await this.writeCaddyfile()
@@ -287,7 +310,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
 
       if (!this.locked) {
         this._caddyChild = process.platform !== 'win32'
-          ? spawn('sudo', ['-E', caddyPath, 'run', '--config', caddyFilePath, '--watch'])
+          ? spawn('sudo', ['-E', caddyPath, 'run', '--config', caddyFilePath, '--watch', '--environ'])
           : spawn(caddyPath, ['run', '--config', caddyFilePath, '--watch'])
 
         lockfile.lockSync(caddyLockFilePath)
