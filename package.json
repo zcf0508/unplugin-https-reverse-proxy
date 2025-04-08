@@ -133,6 +133,7 @@
   },
   "dependencies": {
     "consola": "^3.4.2",
+    "console-table-printer": "^2.12.1",
     "dotenv-flow": "^4.1.0",
     "got-cjs": "^12.5.4",
     "hostile": "^1.4.0",
@@ -140,6 +141,7 @@
     "https-proxy-agent": "^7.0.6",
     "ora": "5",
     "picocolors": "^1.1.1",
+    "qrcode-terminal": "^0.12.0",
     "unplugin": "^2.2.0"
   },
   "devDependencies": {
@@ -152,6 +154,7 @@
     "@types/kill-port": "^2.0.3",
     "@types/node": "^20.11.19",
     "@types/proper-lockfile": "^4.1.4",
+    "@types/qrcode-terminal": "^0.12.2",
     "@vue/cli": "^5.0.8",
     "bumpp": "^9.11.1",
     "chalk": "^5.4.1",

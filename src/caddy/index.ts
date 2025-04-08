@@ -145,6 +145,28 @@ export class CaddyInstant {
   auto_https disable_redirects
 }
 
+:7601 {
+  root * "${join(
+    process.platform === 'win32'
+      ? `${process.env.AppData!}/Caddy`
+      : `${process.env.HOME!}/Library/Application Support/Caddy`,
+    './pki/authorities/local',
+  )}"
+  file_server browse
+}
+
+# 正向代理配置
+:7600 {
+  bind 0.0.0.0
+  
+  forward_proxy {
+    hide_ip
+    hide_via
+    acl {
+      allow all
+    }
+  }
+}
 `
     await writeFile(caddyFilePath, contet)
     this.caddyfile = contet
@@ -211,29 +233,6 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
         body "Service Unavailable"
         close
       }
-    }
-  }
-}
-
-:7601 {
-  root * "${join(
-    process.platform === 'win32'
-      ? `${process.env.AppData!}/Caddy`
-      : `${process.env.HOME!}/Library/Application Support/Caddy`,
-    './pki/authorities/local',
-  )}"
-  file_server browse
-}
-
-# 正向代理配置
-:7600 {
-  bind 0.0.0.0
-  
-  forward_proxy {
-    hide_ip
-    hide_via
-    acl {
-      allow all
     }
   }
 }
@@ -310,7 +309,7 @@ ${target.split(':')[0]}${https ? '' : ':80'} {
 
       if (!this.locked) {
         this._caddyChild = process.platform !== 'win32'
-          ? spawn('sudo', ['-E', caddyPath, 'run', '--config', caddyFilePath, '--watch', '--environ'])
+          ? spawn('sudo', ['-E', caddyPath, 'run', '--config', caddyFilePath, '--watch'])
           : spawn(caddyPath, ['run', '--config', caddyFilePath, '--watch'])
 
         lockfile.lockSync(caddyLockFilePath)

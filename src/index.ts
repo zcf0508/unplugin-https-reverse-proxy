@@ -2,10 +2,11 @@ import type { UnpluginFactory } from 'unplugin'
 import type { ResolvedConfig } from 'vite'
 import type { Options } from './types'
 import process from 'node:process'
+import { Table } from 'console-table-printer'
 import c from 'picocolors'
 import { createUnplugin } from 'unplugin'
 import { CaddyInstant } from './caddy'
-import { consola, isAdmin, once } from './utils'
+import { consola, generateQrcode, getIpv4List, isAdmin, once } from './utils'
 
 let config: ResolvedConfig
 
@@ -15,6 +16,38 @@ const cwd = process.cwd()
 
 function colorUrl(url: string): string {
   return c.green(url.replace(/:(\d+)\//, (_, port) => `:${c.bold(port)}/`))
+}
+
+async function printForwardProxy(): Promise<void> {
+  const ipv4List = getIpv4List()
+  if (ipv4List.length) {
+    const ips = ipv4List.map(ip => c.cyan(ip)).join(', ')
+    consola.info(`${c.bold('Mobile device proxy access')}:\n`)
+    consola.info('1. Install certificate: scan the QR code and download the \`root.crt\` file,')
+    consola.info('   then install it on your mobile device')
+
+    const ipTable = await Promise.all(
+      ipv4List.map(async ip => ({
+        target: `http://${ip}:7601`,
+        certificate: await generateQrcode(`http://${ip}:7601`),
+      })),
+    )
+
+    const table = new Table({
+      columns: [
+        { name: 'target', alignment: 'left' },
+        { name: 'certificate', alignment: 'center', minLen: 28 },
+      ],
+    })
+
+    ipTable.forEach((ip) => {
+      table.addRow(ip)
+    })
+
+    table.printTable()
+
+    consola.info(`2. Set proxy on mobile device (Available IPs: ${ips}):${7600}\n\n`)
+  }
 }
 
 export const vitePrintUrls = once((
@@ -32,7 +65,9 @@ export const vitePrintUrls = once((
   caddy.run(source, target, {
     base,
     ...options,
-  }).then(() => {
+  }).then(async () => {
+    await printForwardProxy()
+
     consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
   }).catch((e) => {
     throw e
@@ -134,7 +169,9 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     caddy.run(source, target, {
       ...options,
     }).then(() => {
-      compiler.hooks.done.tap('unplugin-https-reverse-proxy', () => {
+      compiler.hooks.done.tap('unplugin-https-reverse-proxy', async () => {
+        await printForwardProxy()
+
         consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}`)}`)
       })
     }).catch((e) => {
@@ -181,7 +218,9 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 
     caddy.run(source, target, {
       ...options,
-    }).then(() => {
+    }).then(async () => {
+      await printForwardProxy()
+
       consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}`)}`)
     }).catch((e) => {
       throw e

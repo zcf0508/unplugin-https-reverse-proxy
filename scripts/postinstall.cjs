@@ -26,12 +26,34 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var import_node_fs3 = require("fs");
 var import_node_process5 = __toESM(require("process"), 1);
 
+// src/caddy/index.ts
+var import_node_child_process4 = require("child_process");
+var import_node_fs2 = require("fs");
+var import_promises2 = require("fs/promises");
+var import_node_os3 = require("os");
+var import_node_path3 = require("path");
+var import_node_process4 = __toESM(require("process"), 1);
+var import_got_cjs = require("got-cjs");
+var import_http_proxy_agent = require("http-proxy-agent");
+var import_https_proxy_agent = require("https-proxy-agent");
+var lockfile = __toESM(require("proper-lockfile"), 1);
+
+// src/host/index.ts
+var import_node_child_process2 = require("child_process");
+var import_node_fs = require("fs");
+var import_node_process2 = __toESM(require("process"), 1);
+var import_node_util = require("util");
+var import_hostile = __toESM(require("hostile"), 1);
+
 // src/utils.ts
-var import_node_process = __toESM(require("process"), 1);
-var import_node_path = __toESM(require("path"), 1);
-var import_promises = require("fs/promises");
 var import_node_child_process = require("child_process");
+var import_promises = require("fs/promises");
+var import_node_os = require("os");
+var import_node_path = __toESM(require("path"), 1);
+var import_node_process = __toESM(require("process"), 1);
 var import_consola = require("consola");
+var import_picocolors = __toESM(require("picocolors"), 1);
+var import_qrcode_terminal = __toESM(require("qrcode-terminal"), 1);
 var consola = (0, import_consola.createConsola)({
   level: 3
 }).withTag("reverse-proxy");
@@ -45,29 +67,13 @@ function once(fn) {
   };
 }
 
-// src/caddy/index.ts
-var import_node_os2 = require("os");
-var import_node_process4 = __toESM(require("process"), 1);
-var import_node_fs2 = require("fs");
-var import_node_child_process4 = require("child_process");
-var import_promises2 = require("fs/promises");
-var import_got_cjs = require("got-cjs");
-var import_http_proxy_agent = require("http-proxy-agent");
-var import_https_proxy_agent = require("https-proxy-agent");
-var lockfile = __toESM(require("proper-lockfile"), 1);
-
 // src/host/index.ts
-var import_node_process2 = __toESM(require("process"), 1);
-var import_node_child_process2 = require("child_process");
-var import_node_fs = require("fs");
-var import_node_util = require("util");
-var import_hostile = __toESM(require("hostile"), 1);
 var _setHost = (0, import_node_util.promisify)(import_hostile.default.set);
 var _removeHost = (0, import_node_util.promisify)(import_hostile.default.remove);
 
 // src/caddy/constants.ts
+var import_node_os2 = __toESM(require("os"), 1);
 var import_node_path2 = require("path");
-var import_node_os = __toESM(require("os"), 1);
 var import_node_process3 = __toESM(require("process"), 1);
 var import_dotenv_flow = __toESM(require("dotenv-flow"), 1);
 import_dotenv_flow.default.config({
@@ -75,7 +81,7 @@ import_dotenv_flow.default.config({
 });
 function resolvePath(path2) {
   if (path2.startsWith("~"))
-    return (0, import_node_path2.join)(import_node_os.default.homedir() || "", path2.slice(1));
+    return (0, import_node_path2.join)(import_node_os2.default.homedir() || "", path2.slice(1));
   return path2;
 }
 var TEMP_DIR = resolvePath(import_node_process3.default.env.UHRP_CADDY_PATH || import_node_process3.default.env.TEMP || import_node_process3.default.env.TMPDIR || "/tmp");
@@ -194,8 +200,8 @@ var supportList = [
 ];
 
 // src/caddy/utils.ts
-var import_node_net = require("net");
 var import_node_child_process3 = require("child_process");
+var import_node_net = require("net");
 var import_ora = __toESM(require("ora"), 1);
 var spinner;
 function getNumber(number) {
@@ -241,14 +247,14 @@ async function download() {
       (0, import_node_fs2.chmodSync)(TEMP_DIR, 511);
     }
     const file = (0, import_node_fs2.createWriteStream)(caddyPath);
-    let _platform = (0, import_node_os2.platform)().toString();
+    let _platform = (0, import_node_os3.platform)().toString();
     _platform === "win32" && (_platform = "windows");
     let _arch = import_node_process4.default.arch.toString();
     _arch === "x64" && (_arch = "amd64");
     const support = supportList.find((item) => item.platform === _platform && item.arch === _arch);
     if (!support)
       return reject(new Error("not support"));
-    const dowmloadLink = `https://caddyserver.com/api/download?os=${support.platform}&arch=${support.arch}`;
+    const dowmloadLink = `https://caddyserver.com/api/download?os=${support.platform}&arch=${support.arch}&p=github.com%2Fcaddyserver%2Fforwardproxy`;
     (0, import_node_fs2.existsSync)(caddyPath) && (0, import_node_fs2.unlinkSync)(caddyPath);
     const httpProxy = import_node_process4.default.env.HTTP_PROXY || import_node_process4.default.env.http_proxy;
     const httpsProxy = import_node_process4.default.env.HTTPS_PROXY || import_node_process4.default.env.https_proxy;
