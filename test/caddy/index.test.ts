@@ -44,7 +44,24 @@ describe('caddy', () => {
           debug
           auto_https disable_redirects
         }
-            
+
+        :7601 {
+          root * "/Users/zyb/Library/Application Support/Caddy/pki/authorities/local"
+          file_server browse
+        }
+
+        # 正向代理配置
+        :7600 {
+          bind 0.0.0.0
+          
+          forward_proxy {
+            hide_ip
+            hide_via
+            acl {
+              allow all
+            }
+          }
+        }
 
         test-1.abc.com:80 {
           
@@ -71,7 +88,6 @@ describe('caddy', () => {
             }
           }
         }
-
         "
       `)
 
@@ -94,7 +110,24 @@ describe('caddy', () => {
           debug
           auto_https disable_redirects
         }
-            
+
+        :7601 {
+          root * "/Users/zyb/Library/Application Support/Caddy/pki/authorities/local"
+          file_server browse
+        }
+
+        # 正向代理配置
+        :7600 {
+          bind 0.0.0.0
+          
+          forward_proxy {
+            hide_ip
+            hide_via
+            acl {
+              allow all
+            }
+          }
+        }
 
         test-2.abc.com {
           tls internal
@@ -121,7 +154,6 @@ describe('caddy', () => {
             }
           }
         }
-
         "
       `)
       await caddy.baseCleanup()
@@ -141,7 +173,24 @@ describe('caddy', () => {
           debug
           auto_https disable_redirects
         }
-            
+
+        :7601 {
+          root * "/Users/zyb/Library/Application Support/Caddy/pki/authorities/local"
+          file_server browse
+        }
+
+        # 正向代理配置
+        :7600 {
+          bind 0.0.0.0
+          
+          forward_proxy {
+            hide_ip
+            hide_via
+            acl {
+              allow all
+            }
+          }
+        }
 
         test-3.abc.com:80 {
           
@@ -168,7 +217,6 @@ describe('caddy', () => {
             }
           }
         }
-
         "
       `)
 
@@ -187,7 +235,24 @@ describe('caddy', () => {
           debug
           auto_https disable_redirects
         }
-            
+
+        :7601 {
+          root * "/Users/zyb/Library/Application Support/Caddy/pki/authorities/local"
+          file_server browse
+        }
+
+        # 正向代理配置
+        :7600 {
+          bind 0.0.0.0
+          
+          forward_proxy {
+            hide_ip
+            hide_via
+            acl {
+              allow all
+            }
+          }
+        }
 
         test-3.abc.com:80 {
           
@@ -214,7 +279,6 @@ describe('caddy', () => {
             }
           }
         }
-
 
         test-4.abc.com {
           tls internal
@@ -241,7 +305,6 @@ describe('caddy', () => {
             }
           }
         }
-
         "
       `)
 
@@ -266,7 +329,24 @@ describe('caddy', () => {
           debug
           auto_https disable_redirects
         }
-            
+
+        :7601 {
+          root * "/Users/zyb/Library/Application Support/Caddy/pki/authorities/local"
+          file_server browse
+        }
+
+        # 正向代理配置
+        :7600 {
+          bind 0.0.0.0
+          
+          forward_proxy {
+            hide_ip
+            hide_via
+            acl {
+              allow all
+            }
+          }
+        }
 
         test-2.abc.com {
           tls internal
@@ -293,7 +373,6 @@ describe('caddy', () => {
             }
           }
         }
-
         "
       `)
 
