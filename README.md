@@ -304,6 +304,12 @@ module.exports = {
 
 <br></details>
 
+## NOTICE!
+You need delete `caddy` executable file after you updated to `^2.0.0`.
+The default path is `$TMPDIR/caddy`, and if you set `UHRP_CADDY_PATH`, it will be in the path you set.
+
+Please check [caddy path](https://github.com/zcf0508/unplugin-https-reverse-proxy/blob/v1.0.0/src/caddy/constants.ts#L17).
+
 ## Usage
 
 ```bash
