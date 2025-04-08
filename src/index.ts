@@ -46,7 +46,7 @@ async function printForwardProxy(): Promise<void> {
 
     table.printTable()
 
-    consola.info(`2. Set proxy on mobile device (Available IPs: ${ips}):${7600}\n\n`)
+    consola.info(`2. Set proxy on mobile device (Available IPs: ${ips}):${c.bold(7600)}\n\n`)
   }
 }
 
