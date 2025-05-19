@@ -36,6 +36,11 @@ export default defineNuxtModule<ModuleOptions>({
       return
     }
 
+    if (target.match(/^(?:https?)?:\/\//)) {
+      consola.fail('target must be a domain')
+      return
+    }
+
     // https://github.com/nuxt/cli/issues/220#issuecomment-1735394141
     _nuxt.hook('listen', (_, listener) => {
       const url = listener.url

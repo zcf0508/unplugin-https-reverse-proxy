@@ -102,6 +102,11 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         return
       }
 
+      if (target.match(/^(?:https?)?:\/\//)) {
+        consola.fail('target must be a domain')
+        return
+      }
+
       const _printUrls = server.printUrls.bind(server)
 
       let source = `localhost:${config.server.port || 5173}`
@@ -135,6 +140,11 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 
     if (!target) {
       consola.fail('please provide target')
+      return
+    }
+
+    if (target.match(/^(?:https?)?:\/\//)) {
+      consola.fail('target must be a domain')
       return
     }
 
@@ -197,6 +207,11 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 
     if (!target) {
       consola.fail('please provide target')
+      return
+    }
+
+    if (target.match(/^(?:https?)?:\/\//)) {
+      consola.fail('target must be a domain')
       return
     }
 
