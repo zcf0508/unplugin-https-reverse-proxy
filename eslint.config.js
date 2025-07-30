@@ -7,7 +7,6 @@ export default antfu({
     ignores: [
       'docs/**/*',
       'examples/**/*',
-      'scripts/postinstall.cjs',
     ],
   },
 ])

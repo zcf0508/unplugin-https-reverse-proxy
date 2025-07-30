@@ -75,11 +75,9 @@
   },
   "files": [
     "dist",
-    "scripts/postinstall.cjs",
     "src"
   ],
   "scripts": {
-    "postinstall": "node scripts/postinstall.cjs",
     "build": "tsup",
     "dev": "tsup --watch src",
     "build:fix": "tsx scripts/postbuild.ts",
