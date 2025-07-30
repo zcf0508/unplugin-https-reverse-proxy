@@ -12,5 +12,5 @@ export default [
     dts: true,
     onSuccess: 'npm run build:fix',
     external: ['proper-lockfile'],
-  }
+  },
 ] satisfies Options[]
