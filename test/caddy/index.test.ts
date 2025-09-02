@@ -39,10 +39,10 @@ describe('caddy', () => {
 
       const caddyfile = await caddy.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
-        "
-        {
+        "{
           debug
           auto_https disable_redirects
+          
         }
 
         :7601 {
@@ -62,6 +62,11 @@ describe('caddy', () => {
             }
           }
         }
+
+
+
+
+
 
         test-1.abc.com:80 {
           
@@ -88,6 +93,7 @@ describe('caddy', () => {
             }
           }
         }
+
         "
       `)
 
@@ -105,10 +111,10 @@ describe('caddy', () => {
 
       const caddyfile = await caddy.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
-        "
-        {
+        "{
           debug
           auto_https disable_redirects
+          
         }
 
         :7601 {
@@ -128,6 +134,11 @@ describe('caddy', () => {
             }
           }
         }
+
+
+
+
+
 
         test-2.abc.com {
           tls internal
@@ -154,6 +165,7 @@ describe('caddy', () => {
             }
           }
         }
+
         "
       `)
       await caddy.baseCleanup()
@@ -168,10 +180,10 @@ describe('caddy', () => {
 
       let caddyfile = await caddy_80.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
-        "
-        {
+        "{
           debug
           auto_https disable_redirects
+          
         }
 
         :7601 {
@@ -191,6 +203,11 @@ describe('caddy', () => {
             }
           }
         }
+
+
+
+
+
 
         test-3.abc.com:80 {
           
@@ -217,6 +234,7 @@ describe('caddy', () => {
             }
           }
         }
+
         "
       `)
 
@@ -230,10 +248,10 @@ describe('caddy', () => {
 
       caddyfile = await caddy_443.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
-        "
-        {
+        "{
           debug
           auto_https disable_redirects
+          
         }
 
         :7601 {
@@ -253,6 +271,11 @@ describe('caddy', () => {
             }
           }
         }
+
+
+
+
+
 
         test-3.abc.com:80 {
           
@@ -279,6 +302,10 @@ describe('caddy', () => {
             }
           }
         }
+
+
+
+
 
         test-4.abc.com {
           tls internal
@@ -305,6 +332,7 @@ describe('caddy', () => {
             }
           }
         }
+
         "
       `)
 
@@ -324,10 +352,10 @@ describe('caddy', () => {
 
       const caddyfile = await caddy.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
-        "
-        {
+        "{
           debug
           auto_https disable_redirects
+          
         }
 
         :7601 {
@@ -347,6 +375,11 @@ describe('caddy', () => {
             }
           }
         }
+
+
+
+
+
 
         test-2.abc.com {
           tls internal
@@ -373,6 +406,7 @@ describe('caddy', () => {
             }
           }
         }
+
         "
       `)
 
