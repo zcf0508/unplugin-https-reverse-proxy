@@ -7,11 +7,15 @@ import process from 'node:process'
 import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
+import { Liquid } from 'liquidjs'
 import * as lockfile from 'proper-lockfile'
 import { addHost, removeHost } from '../host'
 import { chmodRecursive, consola, once } from '../utils'
+import { caddyTemplate, validateTemplateContext } from './caddyfile'
 import { caddyFilePath, caddyLockFilePath, caddyPath, supportList, TEMP_DIR } from './constants'
 import { kill, logProgress, logProgressOver, tryPort } from './utils'
+
+const liquid = new Liquid()
 
 export async function download(): Promise<string> {
   if (await testCaddy())
@@ -139,35 +143,16 @@ export class CaddyInstant {
   }
 
   async initCaddyfile(): Promise<void> {
-    const contet = `
-{
-  debug
-  auto_https disable_redirects
-}
+    const caddyRoot = join(
+      process.platform === 'win32'
+        ? `${process.env.AppData!}/Caddy`
+        : `${process.env.HOME!}/Library/Application Support/Caddy`,
+      './pki/authorities/local',
+    )
 
-:7601 {
-  root * "${join(
-    process.platform === 'win32'
-      ? `${process.env.AppData!}/Caddy`
-      : `${process.env.HOME!}/Library/Application Support/Caddy`,
-    './pki/authorities/local',
-  )}"
-  file_server browse
-}
-
-# 正向代理配置
-:7600 {
-  bind 0.0.0.0
-  
-  forward_proxy {
-    hide_ip
-    hide_via
-    acl {
-      allow all
-    }
-  }
-}
-`
+    const ctx = { include_base: true, caddy_root: caddyRoot, proxies: [] }
+    validateTemplateContext(ctx)
+    const contet = await liquid.parseAndRender(caddyTemplate, ctx)
     await writeFile(caddyFilePath, contet)
     this.caddyfile = contet
   }
@@ -210,36 +195,26 @@ export class CaddyInstant {
 
     await this.getCaddyfile()
     if (!(this.caddyfile || '').includes(`${target.split(':')[0]}${https ? '' : ':80'}`)) {
-      this.caddyfile = `${this.caddyfile}
-${target.split(':')[0]}${https ? '' : ':80'} {
-  ${https ? 'tls internal' : ''}
-  reverse_proxy http://${source} {
-    health_uri ${base}
-    health_interval 2s
-    health_timeout 5s
-    fail_duration 2s
-    unhealthy_status 502 503 504 404
-    lb_try_duration 3s
-    lb_try_interval 300ms
-    health_headers {
-      Accept text/html
-      Accept-Encoding gzip, deflate, br
-      User-Agent Caddy-Health-Check
-    }
-
-    @error status 502 503 504 404
-    handle_response @error {
-      respond * 503 {
-        body "Service Unavailable"
-        close
+      const targetHost = target.split(':')[0]
+      const ctx = {
+        include_base: false,
+        proxies: [
+          {
+            target: targetHost,
+            port_suffix: https ? '' : ':80',
+            tls: https ? 'tls internal' : '',
+            source,
+            base,
+          },
+        ],
       }
-    }
-  }
-}
-`
+      validateTemplateContext(ctx)
+      const block = await liquid.parseAndRender(caddyTemplate, ctx)
 
+      this.caddyfile = `${this.caddyfile}\n${block}`
       await this.writeCaddyfile()
     }
+
     if (!existsSync(caddyLockFilePath))
       writeFileSync(caddyLockFilePath, '')
 
