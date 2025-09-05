@@ -4,18 +4,17 @@ import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { platform } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { effect } from 'alien-signals'
 import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
-import { Liquid } from 'liquidjs'
 import * as lockfile from 'proper-lockfile'
 import { addHost, removeHost } from '../host'
 import { chmodRecursive, consola, once } from '../utils'
-import { caddyTemplate, validateTemplateContext } from './caddyfile'
+import { genCaddyfile, validateTemplateContext } from './caddyfile'
+import { useCaddyConfig } from './config'
 import { caddyFilePath, caddyLockFilePath, caddyPath, supportList, TEMP_DIR } from './constants'
 import { kill, logProgress, logProgressOver, tryPort } from './utils'
-
-const liquid = new Liquid()
 
 export async function download(): Promise<string> {
   if (await testCaddy())
@@ -105,11 +104,13 @@ interface RunOptions {
   https: boolean
 }
 
+const { cleanUp, configJsonRef, writeCaddyConfig } = useCaddyConfig()
+
 export class CaddyInstant {
   private inited = false
   private stoped = false
 
-  /** has locked */
+  /** has locked when start */
   private locked = false
   private caddyfile: string | undefined
 
@@ -117,11 +118,10 @@ export class CaddyInstant {
 
   private _source: string | undefined
   private _target: string | undefined
+  private _stopEffects: Array< (() => void)> = []
 
   constructor() {
     testCaddy().then(async () => {
-      await this.getCaddyfile()
-
       this.inited = true
     })
 
@@ -135,26 +135,22 @@ export class CaddyInstant {
   }
 
   async getCaddyfile(): Promise<string> {
-    if (!existsSync(caddyFilePath))
-      await this.initCaddyfile()
+    if (!existsSync(caddyFilePath)) {
+      this.caddyfile = ''
+      return ''
+    }
 
     this.caddyfile = await readFile(caddyFilePath, 'utf-8')
     return this.caddyfile
   }
 
-  async initCaddyfile(): Promise<void> {
-    const caddyRoot = join(
+  get caddyRoot(): string {
+    return join(
       process.platform === 'win32'
         ? `${process.env.AppData!}/Caddy`
         : `${process.env.HOME!}/Library/Application Support/Caddy`,
       './pki/authorities/local',
     )
-
-    const ctx = { include_base: true, caddy_root: caddyRoot, proxies: [] }
-    validateTemplateContext(ctx)
-    const contet = await liquid.parseAndRender(caddyTemplate, ctx)
-    await writeFile(caddyFilePath, contet)
-    this.caddyfile = contet
   }
 
   async writeCaddyfile(): Promise<void> {
@@ -193,27 +189,34 @@ export class CaddyInstant {
       throw new Error('update host failed')
     consola.success('update host success\n')
 
-    await this.getCaddyfile()
-    if (!(this.caddyfile || '').includes(`${target.split(':')[0]}${https ? '' : ':80'}`)) {
-      const targetHost = target.split(':')[0]
-      const ctx = {
-        include_base: false,
-        proxies: [
-          {
-            target: targetHost,
-            port_suffix: https ? '' : ':80',
-            tls: https ? 'tls internal' : '',
-            source,
-            base,
-          },
-        ],
-      }
-      validateTemplateContext(ctx)
-      const block = await liquid.parseAndRender(caddyTemplate, ctx)
+    const targetHost = target.split(':')[0]
 
-      this.caddyfile = `${this.caddyfile}\n${block}`
-      await this.writeCaddyfile()
-    }
+    const proxies = [
+      {
+        target: targetHost,
+        port_suffix: https ? '' : ':80',
+        tls: https ? 'tls internal' : '',
+        source,
+        base,
+      },
+    ]
+
+    writeCaddyConfig(proxies)
+
+    this._stopEffects.push(
+      effect(async () => {
+        const proxies = Object.values(configJsonRef() || {})
+        if (!(this.caddyfile || '').includes(`${target.split(':')[0]}${https ? '' : ':80'}`)) {
+          const ctx = validateTemplateContext({
+            caddy_root: this.caddyRoot,
+            proxies,
+          })
+
+          this.caddyfile = await genCaddyfile(ctx)
+          await this.writeCaddyfile()
+        }
+      }),
+    )
 
     if (!existsSync(caddyLockFilePath))
       writeFileSync(caddyLockFilePath, '')
@@ -341,6 +344,8 @@ export class CaddyInstant {
   }
 
   async baseCleanup(restore: boolean = true): Promise<void> {
+    this._stopEffects.forEach(fn => fn())
+
     try {
       if (restore && this._source && this._target) {
         if (await removeHost(this._source.split(':')[0], this._target.split(':')[0]))
@@ -360,6 +365,7 @@ export class CaddyInstant {
         await lockfile.unlock(caddyLockFilePath).catch(() => { })
         await unlink(caddyFilePath).catch(() => { })
         await unlink(caddyLockFilePath).catch(() => { })
+        await cleanUp()
       }
       catch (e) {
         consola.error(e)

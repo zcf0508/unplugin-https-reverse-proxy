@@ -14,6 +14,10 @@ beforeAll(async () => {
     await unlink(resolve(baseTestUrl, TEMP_DIR))
 })
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 describe('caddy', () => {
   it('download', async () => {
     expect(await download()).toBe(caddyPath)
@@ -42,7 +46,6 @@ describe('caddy', () => {
         "{
           debug
           auto_https disable_redirects
-          
         }
 
         :7601 {
@@ -62,10 +65,6 @@ describe('caddy', () => {
             }
           }
         }
-
-
-
-
 
 
         test-1.abc.com:80 {
@@ -114,7 +113,6 @@ describe('caddy', () => {
         "{
           debug
           auto_https disable_redirects
-          
         }
 
         :7601 {
@@ -134,10 +132,6 @@ describe('caddy', () => {
             }
           }
         }
-
-
-
-
 
 
         test-2.abc.com {
@@ -183,7 +177,6 @@ describe('caddy', () => {
         "{
           debug
           auto_https disable_redirects
-          
         }
 
         :7601 {
@@ -203,10 +196,6 @@ describe('caddy', () => {
             }
           }
         }
-
-
-
-
 
 
         test-3.abc.com:80 {
@@ -246,12 +235,12 @@ describe('caddy', () => {
 
       expect(caddy_443.checkLock()).toBe(true)
 
+      await sleep(50)
       caddyfile = await caddy_443.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
         "{
           debug
           auto_https disable_redirects
-          
         }
 
         :7601 {
@@ -271,10 +260,6 @@ describe('caddy', () => {
             }
           }
         }
-
-
-
-
 
 
         test-3.abc.com:80 {
@@ -302,10 +287,6 @@ describe('caddy', () => {
             }
           }
         }
-
-
-
-
 
         test-4.abc.com {
           tls internal
@@ -355,7 +336,6 @@ describe('caddy', () => {
         "{
           debug
           auto_https disable_redirects
-          
         }
 
         :7601 {
@@ -375,10 +355,6 @@ describe('caddy', () => {
             }
           }
         }
-
-
-
-
 
 
         test-2.abc.com {

@@ -1,6 +1,7 @@
 import { type } from 'arktype'
+import { Liquid } from 'liquidjs'
 
-const ProxyType = type({
+export const ProxyType = type({
   target: 'string',
   port_suffix: 'string',
   tls: 'string',
@@ -9,24 +10,19 @@ const ProxyType = type({
 })
 
 const CaddyContext = type({
-  include_base: 'boolean',
-  caddy_root: 'string?',
-
+  caddy_root: 'string',
   proxies: ProxyType.array(),
-}).narrow((data, ctx) => {
-  if (data.include_base && (!data.caddy_root || data.caddy_root.length === 0)) {
-    return ctx.reject({ expected: 'non-empty caddy_root when include_base is true', actual: String(data.caddy_root) })
-  }
-  return true
 })
 
-export function validateTemplateContext(ctx: unknown): void {
+export function validateTemplateContext(ctx: unknown): typeof CaddyContext.infer {
   const out = CaddyContext(ctx as any)
   if (out instanceof type.errors)
     throw new Error(out.summary)
+
+  return ctx as typeof CaddyContext.infer
 }
 
-export const caddyTemplate = `{% if include_base %}{
+export const caddyTemplate = `{
   debug
   auto_https disable_redirects
 }
@@ -48,7 +44,6 @@ export const caddyTemplate = `{% if include_base %}{
     }
   }
 }
-{% endif %}
 
 {% for p in proxies %}
 {{ p.target }}{{ p.port_suffix }} {
@@ -78,3 +73,9 @@ export const caddyTemplate = `{% if include_base %}{
 }
 {% endfor %}
 `
+
+const liquid = new Liquid()
+
+export async function genCaddyfile(ctx: typeof CaddyContext.infer): Promise<string> {
+  return await liquid.parseAndRender(caddyTemplate, ctx)
+}
