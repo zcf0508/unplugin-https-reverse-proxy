@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      alien-signals:
-        specifier: ^2.0.7
-        version: 2.0.7
       consola:
         specifier: ^3.4.2
         version: 3.4.2
@@ -81,6 +78,9 @@ importers:
       '@vue/cli':
         specifier: ^5.0.8
         version: 5.0.8(encoding@0.1.13)
+      alien-signals:
+        specifier: ^2.0.7
+        version: 2.0.7
       arktype:
         specifier: ^2.1.20
         version: 2.1.20
