@@ -143,7 +143,6 @@
     "unplugin": "^2.2.0"
   },
   "devDependencies": {
-    "alien-signals": "^2.0.7",
     "@antfu/eslint-config": "^4.10.2",
     "@nuxt/kit": "^3.16.1",
     "@nuxt/schema": "^3.16.1",
@@ -155,6 +154,7 @@
     "@types/proper-lockfile": "^4.1.4",
     "@types/qrcode-terminal": "^0.12.2",
     "@vue/cli": "^5.0.8",
+    "alien-signals": "^2.0.7",
     "arktype": "^2.1.20",
     "bumpp": "^9.11.1",
     "chalk": "^5.4.1",
