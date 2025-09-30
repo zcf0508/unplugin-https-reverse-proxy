@@ -5,4 +5,5 @@ export interface Options {
   showCaddyLog?: boolean
   /** default `false` */
   https?: boolean
+  health_check?: boolean
 }

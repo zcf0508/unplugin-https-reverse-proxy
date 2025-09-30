@@ -102,6 +102,7 @@ interface RunOptions {
   base: string
   showCaddyLog: boolean
   https: boolean
+  health_check?: boolean
 }
 
 const { cleanUp, configJsonRef, writeCaddyConfig } = useCaddyConfig()
@@ -177,6 +178,7 @@ export class CaddyInstant {
       base = '/',
       showCaddyLog = false,
       https = false,
+      health_check = true,
     } = options || {}
 
     this._source = source
@@ -198,6 +200,7 @@ export class CaddyInstant {
         tls: https ? 'tls internal' : '',
         source,
         base,
+        health_check,
       },
     ]
 

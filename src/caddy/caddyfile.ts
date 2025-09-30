@@ -7,6 +7,7 @@ export const ProxyType = type({
   tls: 'string',
   source: 'string',
   base: 'string',
+  health_check: 'boolean',
 })
 
 const CaddyContext = type({
@@ -48,7 +49,7 @@ export const caddyTemplate = `{
 {% for p in proxies %}
 {{ p.target }}{{ p.port_suffix }} {
   {{ p.tls }}
-  reverse_proxy http://{{ p.source }} {
+  reverse_proxy http://{{ p.source }} {% if p.health_check %} {
     health_uri {{ p.base }}
     health_interval 2s
     health_timeout 5s
@@ -56,11 +57,6 @@ export const caddyTemplate = `{
     unhealthy_status 502 503 504 404
     lb_try_duration 3s
     lb_try_interval 300ms
-    health_headers {
-      Accept text/html
-      Accept-Encoding gzip, deflate, br
-      User-Agent Caddy-Health-Check
-    }
 
     @error status 502 503 504 404
     handle_response @error {
@@ -70,6 +66,7 @@ export const caddyTemplate = `{
       }
     }
   }
+  {% endif %}
 }
 {% endfor %}
 `
