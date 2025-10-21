@@ -105,7 +105,14 @@ interface RunOptions {
   health_check?: boolean
 }
 
-const { cleanUp, configJsonRef, writeCaddyConfig } = useCaddyConfig()
+let caddyConfig: ReturnType<typeof useCaddyConfig> | undefined
+
+function getCaddyConfig(): ReturnType<typeof useCaddyConfig> {
+  if (!caddyConfig) {
+    caddyConfig = useCaddyConfig()
+  }
+  return caddyConfig
+}
 
 export class CaddyInstant {
   private inited = false
@@ -204,10 +211,12 @@ export class CaddyInstant {
       },
     ]
 
+    const { writeCaddyConfig } = getCaddyConfig()
     writeCaddyConfig(proxies)
 
     this._stopEffects.push(
       effect(async () => {
+        const { configJsonRef } = getCaddyConfig()
         const proxies = Object.values(configJsonRef() || {})
         if (!(this.caddyfile || '').includes(`${target.split(':')[0]}${https ? '' : ':80'}`)) {
           const ctx = validateTemplateContext({
@@ -368,7 +377,9 @@ export class CaddyInstant {
         await lockfile.unlock(caddyLockFilePath).catch(() => { })
         await unlink(caddyFilePath).catch(() => { })
         await unlink(caddyLockFilePath).catch(() => { })
-        await cleanUp()
+        if (caddyConfig) {
+          await caddyConfig.cleanUp()
+        }
       }
       catch (e) {
         consola.error(e)
