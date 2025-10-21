@@ -82,6 +82,7 @@
     "dev": "tsup --watch src",
     "build:fix": "tsx scripts/postbuild.ts",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "play": "npm -C examples/vite run dev",
     "play:rsbuild": "npm -C examples/rsbuild run dev",
     "play:nuxt": "npm -C examples/nuxt run dev",
