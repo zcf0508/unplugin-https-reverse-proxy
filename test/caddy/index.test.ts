@@ -69,7 +69,7 @@ describe('caddy', () => {
 
         test-1.abc.com:80 {
           
-          reverse_proxy http://127.0.0.1:8080 {
+          reverse_proxy http://127.0.0.1:8080  {
             health_uri /
             health_interval 2s
             health_timeout 5s
@@ -77,11 +77,6 @@ describe('caddy', () => {
             unhealthy_status 502 503 504 404
             lb_try_duration 3s
             lb_try_interval 300ms
-            health_headers {
-              Accept text/html
-              Accept-Encoding gzip, deflate, br
-              User-Agent Caddy-Health-Check
-            }
 
             @error status 502 503 504 404
             handle_response @error {
@@ -91,6 +86,7 @@ describe('caddy', () => {
               }
             }
           }
+          
         }
 
         "
@@ -136,7 +132,7 @@ describe('caddy', () => {
 
         test-2.abc.com {
           tls internal
-          reverse_proxy http://127.0.0.1:8080 {
+          reverse_proxy http://127.0.0.1:8080  {
             health_uri /
             health_interval 2s
             health_timeout 5s
@@ -144,11 +140,6 @@ describe('caddy', () => {
             unhealthy_status 502 503 504 404
             lb_try_duration 3s
             lb_try_interval 300ms
-            health_headers {
-              Accept text/html
-              Accept-Encoding gzip, deflate, br
-              User-Agent Caddy-Health-Check
-            }
 
             @error status 502 503 504 404
             handle_response @error {
@@ -158,6 +149,7 @@ describe('caddy', () => {
               }
             }
           }
+          
         }
 
         "
@@ -200,7 +192,7 @@ describe('caddy', () => {
 
         test-3.abc.com:80 {
           
-          reverse_proxy http://127.0.0.1:8080 {
+          reverse_proxy http://127.0.0.1:8080  {
             health_uri /
             health_interval 2s
             health_timeout 5s
@@ -208,11 +200,6 @@ describe('caddy', () => {
             unhealthy_status 502 503 504 404
             lb_try_duration 3s
             lb_try_interval 300ms
-            health_headers {
-              Accept text/html
-              Accept-Encoding gzip, deflate, br
-              User-Agent Caddy-Health-Check
-            }
 
             @error status 502 503 504 404
             handle_response @error {
@@ -222,6 +209,7 @@ describe('caddy', () => {
               }
             }
           }
+          
         }
 
         "
@@ -231,6 +219,7 @@ describe('caddy', () => {
       expect(caddy_443.checkLock()).toBe(true)
       await caddy_443.run('127.0.0.1:8080', 'test-4.abc.com', {
         https: true,
+        healthCheck: false,
       })
 
       expect(caddy_443.checkLock()).toBe(true)
@@ -264,7 +253,7 @@ describe('caddy', () => {
 
         test-3.abc.com:80 {
           
-          reverse_proxy http://127.0.0.1:8080 {
+          reverse_proxy http://127.0.0.1:8080  {
             health_uri /
             health_interval 2s
             health_timeout 5s
@@ -272,11 +261,6 @@ describe('caddy', () => {
             unhealthy_status 502 503 504 404
             lb_try_duration 3s
             lb_try_interval 300ms
-            health_headers {
-              Accept text/html
-              Accept-Encoding gzip, deflate, br
-              User-Agent Caddy-Health-Check
-            }
 
             @error status 502 503 504 404
             handle_response @error {
@@ -286,32 +270,12 @@ describe('caddy', () => {
               }
             }
           }
+          
         }
 
         test-4.abc.com {
           tls internal
-          reverse_proxy http://127.0.0.1:8080 {
-            health_uri /
-            health_interval 2s
-            health_timeout 5s
-            fail_duration 2s
-            unhealthy_status 502 503 504 404
-            lb_try_duration 3s
-            lb_try_interval 300ms
-            health_headers {
-              Accept text/html
-              Accept-Encoding gzip, deflate, br
-              User-Agent Caddy-Health-Check
-            }
-
-            @error status 502 503 504 404
-            handle_response @error {
-              respond * 503 {
-                body "Service Unavailable"
-                close
-              }
-            }
-          }
+          reverse_proxy http://127.0.0.1:8080 
         }
 
         "
@@ -359,7 +323,7 @@ describe('caddy', () => {
 
         test-2.abc.com {
           tls internal
-          reverse_proxy http://127.0.0.1:8080 {
+          reverse_proxy http://127.0.0.1:8080  {
             health_uri /test/
             health_interval 2s
             health_timeout 5s
@@ -367,11 +331,6 @@ describe('caddy', () => {
             unhealthy_status 502 503 504 404
             lb_try_duration 3s
             lb_try_interval 300ms
-            health_headers {
-              Accept text/html
-              Accept-Encoding gzip, deflate, br
-              User-Agent Caddy-Health-Check
-            }
 
             @error status 502 503 504 404
             handle_response @error {
@@ -381,6 +340,7 @@ describe('caddy', () => {
               }
             }
           }
+          
         }
 
         "

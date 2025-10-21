@@ -3,11 +3,11 @@ import { Liquid } from 'liquidjs'
 
 export const ProxyType = type({
   target: 'string',
-  port_suffix: 'string',
+  portSuffix: 'string',
   tls: 'string',
   source: 'string',
   base: 'string',
-  health_check: 'boolean',
+  healthCheck: 'boolean',
 })
 
 const CaddyContext = type({
@@ -47,9 +47,9 @@ export const caddyTemplate = `{
 }
 
 {% for p in proxies %}
-{{ p.target }}{{ p.port_suffix }} {
+{{ p.target }}{{ p.portSuffix }} {
   {{ p.tls }}
-  reverse_proxy http://{{ p.source }} {% if p.health_check %} {
+  reverse_proxy http://{{ p.source }} {% if p.healthCheck %} {
     health_uri {{ p.base }}
     health_interval 2s
     health_timeout 5s

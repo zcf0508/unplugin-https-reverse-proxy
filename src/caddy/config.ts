@@ -44,7 +44,7 @@ export function useCaddyConfig(): {
     const proxies = configJsonRef() || {}
 
     _proxies.forEach((p) => {
-      const index = `${p.target}${p.port_suffix}`
+      const index = `${p.target}${p.portSuffix}`
       proxies[index] = p
     })
 

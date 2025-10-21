@@ -102,7 +102,7 @@ interface RunOptions {
   base: string
   showCaddyLog: boolean
   https: boolean
-  health_check?: boolean
+  healthCheck?: boolean
 }
 
 let caddyConfig: ReturnType<typeof useCaddyConfig> | undefined
@@ -185,7 +185,7 @@ export class CaddyInstant {
       base = '/',
       showCaddyLog = false,
       https = false,
-      health_check = true,
+      healthCheck = true,
     } = options || {}
 
     this._source = source
@@ -203,11 +203,11 @@ export class CaddyInstant {
     const proxies = [
       {
         target: targetHost,
-        port_suffix: https ? '' : ':80',
+        portSuffix: https ? '' : ':80',
         tls: https ? 'tls internal' : '',
         source,
         base,
-        health_check,
+        healthCheck,
       },
     ]
 
