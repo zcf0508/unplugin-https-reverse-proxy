@@ -170,6 +170,7 @@ const reverseProxyOptions = {
   enable: false,
   target: 'xxx',
   https: false,
+  healthCheck: true,
 }
 
 module.exports = {
@@ -209,7 +210,10 @@ module.exports = {
 // nuxt.config.js
 export default defineNuxtConfig({
   modules: [
-    ['unplugin-https-reverse-proxy/nuxt', { /* options */ }],
+    ['unplugin-https-reverse-proxy/nuxt', {
+      /* options */
+      healthCheck: false, // important for nuxt
+    }],
   ],
 })
 ```
