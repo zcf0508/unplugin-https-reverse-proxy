@@ -1,6 +1,7 @@
 # unplugin-https-reverse-proxy
 
 [![NPM version](https://img.shields.io/npm/v/unplugin-https-reverse-proxy?color=a1b858&label=)](https://www.npmjs.com/package/unplugin-https-reverse-proxy)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/zcf0508/unplugin-https-reverse-proxy)
 
 A plugin for https reverse proxy, support `vite`、`webpack` and `rspack`.
 
