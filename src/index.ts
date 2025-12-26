@@ -160,6 +160,16 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     if (caddy)
       return
 
+    let base = '/'
+    const publicPath = compiler.options.output?.publicPath as unknown
+    if (typeof publicPath === 'string' && publicPath) {
+      base = publicPath
+    }
+    if (!base.startsWith('/'))
+      base = `/${base}`
+    if (base !== '/' && !base.endsWith('/'))
+      base = `${base}/`
+
     // https://github.com/webpack/webpack-dev-server/blob/master/lib/Server.js#L1913
     const _close = compiler.close?.bind(compiler)
     if (_close) {
@@ -177,12 +187,13 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     caddy = new CaddyInstant()
 
     caddy.run(source, target, {
+      base,
       ...options,
     }).then(() => {
       compiler.hooks.done.tap('unplugin-https-reverse-proxy', async () => {
         await printForwardProxy()
 
-        consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}`)}`)
+        consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
       })
     }).catch((e) => {
       throw e
@@ -231,12 +242,23 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 
     caddy = new CaddyInstant()
 
+    let base = '/'
+    const publicPath = compiler.options.output?.publicPath as unknown
+    if (typeof publicPath === 'string' && publicPath) {
+      base = publicPath
+    }
+    if (!base.startsWith('/'))
+      base = `/${base}`
+    if (base !== '/' && !base.endsWith('/'))
+      base = `${base}/`
+
     caddy.run(source, target, {
+      base,
       ...options,
     }).then(async () => {
       await printForwardProxy()
 
-      consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}`)}`)
+      consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
     }).catch((e) => {
       throw e
     })

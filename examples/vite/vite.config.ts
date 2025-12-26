@@ -3,6 +3,7 @@ import Inspect from 'vite-plugin-inspect'
 import Unplugin from '../../src/vite'
 
 export default defineConfig({
+  base: '/test',
   plugins: [
     Inspect(),
     Unplugin({

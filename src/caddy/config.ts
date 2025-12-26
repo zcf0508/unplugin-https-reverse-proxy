@@ -44,8 +44,13 @@ export function useCaddyConfig(): {
     const proxies = configJsonRef() || {}
 
     _proxies.forEach((p) => {
-      const index = `${p.target}${p.portSuffix}`
-      proxies[index] = p
+      let base = p.base || '/'
+      if (!base.startsWith('/'))
+        base = `/${base}`
+      if (base !== '/' && !base.endsWith('/'))
+        base = `${base}/`
+      const index = `${p.target}${p.portSuffix}${base}`
+      proxies[index] = { ...p, base }
     })
 
     const content = JSON.stringify(proxies, null, 2)

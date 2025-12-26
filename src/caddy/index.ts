@@ -199,6 +199,15 @@ export class CaddyInstant {
     consola.success('update host success\n')
 
     const targetHost = target.split(':')[0]
+    const normalizeBase = (b: string): string => {
+      let out = b || '/'
+      if (!out.startsWith('/'))
+        out = `/${out}`
+      if (out !== '/' && !out.endsWith('/'))
+        out = `${out}/`
+      return out
+    }
+    const baseNormalized = normalizeBase(base)
 
     const proxies = [
       {
@@ -206,7 +215,7 @@ export class CaddyInstant {
         portSuffix: https ? '' : ':80',
         tls: https ? 'tls internal' : '',
         source,
-        base,
+        base: baseNormalized,
         healthCheck,
       },
     ]
@@ -218,15 +227,13 @@ export class CaddyInstant {
       effect(async () => {
         const { configJsonRef } = getCaddyConfig()
         const proxies = Object.values(configJsonRef() || {})
-        if (!(this.caddyfile || '').includes(`${target.split(':')[0]}${https ? '' : ':80'}`)) {
-          const ctx = validateTemplateContext({
-            caddy_root: this.caddyRoot,
-            proxies,
-          })
+        const ctx = validateTemplateContext({
+          caddy_root: this.caddyRoot,
+          proxies,
+        })
 
-          this.caddyfile = await genCaddyfile(ctx)
-          await this.writeCaddyfile()
-        }
+        this.caddyfile = await genCaddyfile(ctx)
+        await this.writeCaddyfile()
       }),
     )
 

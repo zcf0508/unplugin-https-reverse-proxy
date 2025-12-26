@@ -46,27 +46,36 @@ export const caddyTemplate = `{
   }
 }
 
-{% for p in proxies %}
-{{ p.target }}{{ p.portSuffix }} {
-  {{ p.tls }}
-  reverse_proxy http://{{ p.source }} {% if p.healthCheck %} {
-    health_uri {{ p.base }}
-    health_interval 2s
-    health_timeout 5s
-    fail_duration 2s
-    unhealthy_status 502 503 504 404
-    lb_try_duration 3s
-    lb_try_interval 300ms
+{% for host in hosts %}
+{{ host.host }}{{ host.portSuffix }} {
+  {{ host.tls }}
 
-    @error status 502 503 504 404
-    handle_response @error {
-      respond * 503 {
-        body "Service Unavailable"
-        close
+  {% for route in host.routes %}
+  handle {{ route.base }}* {
+    reverse_proxy http://{{ route.source }} {% if route.healthCheck %} {
+      health_uri {{ route.base }}
+      health_interval 2s
+      health_timeout 5s
+      health_headers {
+        User-Agent {http.request.header.User-Agent}
+        Accept text/html,application/json,*/*
+      }
+      fail_duration 2s
+      unhealthy_status 502 503 504 404
+      lb_try_duration 3s
+      lb_try_interval 300ms
+
+      @error status 502 503 504 404
+      handle_response @error {
+        respond * 503 {
+          body "Service Unavailable"
+          close
+        }
       }
     }
+    {% endif %}
   }
-  {% endif %}
+  {% endfor %}
 }
 {% endfor %}
 `
@@ -74,5 +83,35 @@ export const caddyTemplate = `{
 const liquid = new Liquid()
 
 export async function genCaddyfile(ctx: typeof CaddyContext.infer): Promise<string> {
-  return await liquid.parseAndRender(caddyTemplate, ctx)
+  const hostsMap = new Map<string, {
+    host: string
+    portSuffix: string
+    tls: string
+    routes: typeof ProxyType.infer[]
+  }>()
+
+  for (const proxy of ctx.proxies) {
+    const key = `${proxy.target}${proxy.portSuffix}`
+    if (!hostsMap.has(key)) {
+      hostsMap.set(key, {
+        host: proxy.target,
+        portSuffix: proxy.portSuffix,
+        tls: proxy.tls,
+        routes: [],
+      })
+    }
+    let base = proxy.base || '/'
+    if (!base.startsWith('/'))
+      base = `/${base}`
+    if (base !== '/' && !base.endsWith('/'))
+      base = `${base}/`
+    hostsMap.get(key)!.routes.push({ ...proxy, base })
+  }
+
+  for (const host of hostsMap.values())
+    host.routes.sort((a, b) => b.base.length - a.base.length)
+
+  const hosts = Array.from(hostsMap.values())
+
+  return await liquid.parseAndRender(caddyTemplate, { ...ctx, hosts })
 }
