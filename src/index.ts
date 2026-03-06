@@ -13,6 +13,8 @@ let config: ResolvedConfig
 
 let caddy: CaddyInstant
 
+let hmrSseBridgeActive = false
+
 const cwd = process.cwd()
 
 function colorUrl(url: string): string {
@@ -124,11 +126,12 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       // Setup SSE bridge for iOS Safari WSS workaround
       if (options.https) {
         setupHmrSseBridge(server)
+        hmrSseBridgeActive = true
         consola.info('HMR SSE bridge enabled for iOS Safari WSS workaround')
       }
     },
     transformIndexHtml() {
-      if (config.command !== 'serve' || !options.https)
+      if (!hmrSseBridgeActive)
         return []
       // Inject client-side script to patch WebSocket on iOS Safari
       return [{

@@ -1,8 +1,10 @@
+import type { Buffer } from 'node:buffer'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ViteDevServer } from 'vite'
 
 const SSE_PATH = '/__hmr_sse'
 const SEND_PATH = '/__hmr_send'
+const MAX_POST_BODY = 64 * 1024 // 64KB limit for client messages
 
 export function setupHmrSseBridge(server: ViteDevServer): void {
   const sseClients = new Set<ServerResponse>()
@@ -24,9 +26,14 @@ export function setupHmrSseBridge(server: ViteDevServer): void {
       payload = JSON.stringify(args[0])
     }
 
-    // Push to all SSE clients
+    // Push to all SSE clients (skip errored ones)
     for (const res of sseClients) {
-      res.write(`data: ${payload}\n\n`)
+      try {
+        res.write(`data: ${payload}\n\n`)
+      }
+      catch {
+        sseClients.delete(res)
+      }
     }
   }
 
@@ -57,7 +64,6 @@ function handleSseConnection(
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
   })
 
   // Send initial connected message (same as Vite's WebSocket)
@@ -67,13 +73,19 @@ function handleSseConnection(
 
   // Keep-alive ping every 30s
   const keepAlive = setInterval(() => {
-    res.write(': ping\n\n')
+    try {
+      res.write(': ping\n\n')
+    }
+    catch { cleanup() }
   }, 30000)
 
-  res.on('close', () => {
+  function cleanup(): void {
     clearInterval(keepAlive)
     sseClients.delete(res)
-  })
+  }
+
+  res.on('close', cleanup)
+  res.on('error', cleanup)
 }
 
 function handleClientMessage(
@@ -82,10 +94,20 @@ function handleClientMessage(
   server: ViteDevServer,
 ): void {
   let body = ''
+  let overflow = false
   req.on('data', (chunk: Buffer) => {
     body += chunk.toString()
+    if (body.length > MAX_POST_BODY) {
+      overflow = true
+      req.destroy()
+    }
   })
   req.on('end', () => {
+    if (overflow) {
+      res.writeHead(413)
+      res.end('{"ok":false}')
+      return
+    }
     try {
       const data = JSON.parse(body)
       // Forward custom events to Vite's HMR server
@@ -102,7 +124,6 @@ function handleClientMessage(
       }
       res.writeHead(200, {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
       })
       res.end('{"ok":true}')
     }
@@ -237,7 +258,8 @@ export const hmrSseBridgeClientScript = `
   PatchedWebSocket.OPEN = 1;
   PatchedWebSocket.CLOSING = 2;
   PatchedWebSocket.CLOSED = 3;
-  PatchedWebSocket.prototype = OriginalWebSocket.prototype;
+  PatchedWebSocket.prototype = Object.create(OriginalWebSocket.prototype);
+  PatchedWebSocket.prototype.constructor = PatchedWebSocket;
 
   window.WebSocket = PatchedWebSocket;
 })();
