@@ -6,11 +6,14 @@ import { Table } from 'console-table-printer'
 import c from 'picocolors'
 import { createUnplugin } from 'unplugin'
 import { CaddyInstant } from './caddy'
+import { hmrSseBridgeClientScript, setupHmrSseBridge } from './hmr-sse-bridge'
 import { consola, generateQrcode, getIpv4List, isAdmin, once } from './utils'
 
 let config: ResolvedConfig
 
 let caddy: CaddyInstant
+
+let hmrSseBridgeActive = false
 
 const cwd = process.cwd()
 
@@ -119,6 +122,23 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       const base = server.config.base || '/'
 
       server.printUrls = () => vitePrintUrls(options, source, target, base, _printUrls)
+
+      // Setup SSE bridge for iOS Safari WSS workaround
+      if (options.https) {
+        setupHmrSseBridge(server)
+        hmrSseBridgeActive = true
+        consola.info('HMR SSE bridge enabled for iOS Safari WSS workaround')
+      }
+    },
+    transformIndexHtml() {
+      if (!hmrSseBridgeActive)
+        return []
+      // Inject client-side script to patch WebSocket on iOS Safari
+      return [{
+        tag: 'script',
+        children: hmrSseBridgeClientScript,
+        injectTo: 'head-prepend',
+      }]
     },
   },
   webpack(compiler) {
