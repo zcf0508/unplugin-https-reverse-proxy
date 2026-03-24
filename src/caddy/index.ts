@@ -114,6 +114,19 @@ function getCaddyConfig(): ReturnType<typeof useCaddyConfig> {
   return caddyConfig
 }
 
+/** Split `host:port` (IPv4 or hostname); supports `[::1]:port`. */
+function splitHostPort(addr: string): { host: string, port: string } {
+  const lastColon = addr.lastIndexOf(':')
+  if (lastColon === -1)
+    return { host: addr, port: '' }
+  if (addr.startsWith('[')) {
+    const end = addr.indexOf(']')
+    if (end !== -1 && addr[end + 1] === ':')
+      return { host: addr.slice(1, end), port: addr.slice(end + 2) }
+  }
+  return { host: addr.slice(0, lastColon), port: addr.slice(lastColon + 1) }
+}
+
 export class CaddyInstant {
   private inited = false
   private stoped = false
@@ -180,6 +193,9 @@ export class CaddyInstant {
    */
   async run(source: string, target: string, options?: Partial<RunOptions>): Promise<void> {
     source = source.replace('0.0.0.0', '127.0.0.1')
+    // Caddy dials the upstream host via DNS; `localhost` can hit lookup timeouts (VPN/DNS).
+    // Use loopback IP so the proxy never depends on resolving "localhost".
+    source = source.replace(/^localhost(?=:)/i, '127.0.0.1')
     const {
       restore = true,
       base = '/',
@@ -194,11 +210,11 @@ export class CaddyInstant {
     if (!this.inited)
       await this.init()
 
-    if (!await addHost(source.split(':')[0], target.split(':')[0]))
+    const sourceHost = splitHostPort(source).host
+    const targetHost = splitHostPort(target).host
+    if (!await addHost(sourceHost, targetHost))
       throw new Error('update host failed')
     consola.success('update host success\n')
-
-    const targetHost = target.split(':')[0]
     const normalizeBase = (b: string): string => {
       let out = b || '/'
       if (!out.startsWith('/'))
@@ -270,7 +286,7 @@ export class CaddyInstant {
 
         // @ts-expect-error override
         process.exit = async (code?: number) => {
-          const port = Number(source.split(':')[1])
+          const port = Number(splitHostPort(source).port)
           if (!Number.isNaN(port) && await tryPort(port))
             await kill(port)
 
@@ -367,7 +383,7 @@ export class CaddyInstant {
 
     try {
       if (restore && this._source && this._target) {
-        if (await removeHost(this._source.split(':')[0], this._target.split(':')[0]))
+        if (await removeHost(splitHostPort(this._source).host, splitHostPort(this._target).host))
           consola.success('Restore host success.\n')
 
         else
