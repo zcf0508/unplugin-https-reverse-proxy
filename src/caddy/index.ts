@@ -295,6 +295,9 @@ export class CaddyInstant {
           const viteCacheDir = `${pwd}/node_modules/.vite`
           if (existsSync(viteCacheDir))
             await chmodRecursive(viteCacheDir, 0o777).catch(() => { })
+          const viteTempCacheDir = `${pwd}/node_modules/.vite-temp`
+          if (existsSync(viteTempCacheDir))
+            await chmodRecursive(viteTempCacheDir, 0o777).catch(() => { })
           const nuxtCacheDir = `${pwd}/.nuxt`
           if (existsSync(nuxtCacheDir))
             await chmodRecursive(nuxtCacheDir, 0o777).catch(() => { })
