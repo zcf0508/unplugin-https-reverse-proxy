@@ -25,7 +25,7 @@ export function validateTemplateContext(ctx: unknown): typeof CaddyContext.infer
 
 export const caddyTemplate = `{
   debug
-  auto_https disable_redirects
+  auto_https disable_redirects ignore_loaded_certs
 }
 
 :7601 {

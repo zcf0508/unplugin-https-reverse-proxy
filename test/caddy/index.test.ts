@@ -45,7 +45,7 @@ describe('caddy', () => {
       expect(caddyfile).toMatchInlineSnapshot(`
         "{
           debug
-          auto_https disable_redirects
+          auto_https disable_redirects ignore_loaded_certs
         }
 
         :7601 {
@@ -117,7 +117,7 @@ describe('caddy', () => {
       expect(caddyfile).toMatchInlineSnapshot(`
         "{
           debug
-          auto_https disable_redirects
+          auto_https disable_redirects ignore_loaded_certs
         }
 
         :7601 {
@@ -186,7 +186,7 @@ describe('caddy', () => {
       expect(caddyfile).toMatchInlineSnapshot(`
         "{
           debug
-          auto_https disable_redirects
+          auto_https disable_redirects ignore_loaded_certs
         }
 
         :7601 {
@@ -256,7 +256,7 @@ describe('caddy', () => {
       expect(caddyfile).toMatchInlineSnapshot(`
         "{
           debug
-          auto_https disable_redirects
+          auto_https disable_redirects ignore_loaded_certs
         }
 
         :7601 {
@@ -340,7 +340,7 @@ describe('caddy', () => {
       expect(caddyfile).toMatchInlineSnapshot(`
         "{
           debug
-          auto_https disable_redirects
+          auto_https disable_redirects ignore_loaded_certs
         }
 
         :7601 {

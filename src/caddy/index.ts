@@ -14,6 +14,8 @@ import { chmodRecursive, consola, once } from '../utils'
 import { genCaddyfile, validateTemplateContext } from './caddyfile'
 import { useCaddyConfig } from './config'
 import { caddyFilePath, caddyLockFilePath, caddyPath, supportList, TEMP_DIR } from './constants'
+import { isCaddyReloadCancellation } from './log'
+import { formatTlsHealthFailure, waitForLocalTls } from './tls-health'
 import { kill, logProgress, logProgressOver, tryPort } from './utils'
 
 export async function download(): Promise<string> {
@@ -187,6 +189,43 @@ export class CaddyInstant {
     this.inited = true
   }
 
+  private async ensureTlsReady(targetHost: string): Promise<void> {
+    const health = await waitForLocalTls(targetHost)
+    if (!health.healthy)
+      throw new Error(formatTlsHealthFailure(targetHost, health))
+  }
+
+  private async updateCaddyfile(): Promise<void> {
+    const { configJsonRef } = getCaddyConfig()
+    const proxies = Object.values(configJsonRef() || {})
+    const ctx = validateTemplateContext({
+      caddy_root: this.caddyRoot,
+      proxies,
+    })
+
+    this.caddyfile = await genCaddyfile(ctx)
+    await this.writeCaddyfile()
+  }
+
+  private async stopCaddy(): Promise<void> {
+    try {
+      await got.post('http://127.0.0.1:2019/stop', {
+        headers: {
+          Origin: 'http://localhost:2019',
+        },
+        retry: {
+          limit: 0,
+        },
+        timeout: {
+          request: 2000,
+        },
+      })
+    }
+    catch {}
+
+    this._caddyChild?.kill()
+  }
+
   /**
    * @param source like `127.0.0.1:8080`
    * @param target like `test.abc.com`. And if you provide a port ,it will be ignore.
@@ -239,17 +278,17 @@ export class CaddyInstant {
     const { writeCaddyConfig } = getCaddyConfig()
     writeCaddyConfig(proxies)
 
-    this._stopEffects.push(
-      effect(async () => {
-        const { configJsonRef } = getCaddyConfig()
-        const proxies = Object.values(configJsonRef() || {})
-        const ctx = validateTemplateContext({
-          caddy_root: this.caddyRoot,
-          proxies,
-        })
+    await this.updateCaddyfile()
 
-        this.caddyfile = await genCaddyfile(ctx)
-        await this.writeCaddyfile()
+    let skipInitialCaddyfileEffect = true
+    this._stopEffects.push(
+      effect(() => {
+        getCaddyConfig().configJsonRef()
+        if (skipInitialCaddyfileEffect) {
+          skipInitialCaddyfileEffect = false
+          return
+        }
+        void this.updateCaddyfile()
       }),
     )
 
@@ -264,6 +303,25 @@ export class CaddyInstant {
     }
 
     return new Promise<void>((resolve, reject) => {
+      let startupCheckStarted = false
+
+      const resolveWhenReady = async (): Promise<void> => {
+        if (startupCheckStarted)
+          return
+        startupCheckStarted = true
+
+        try {
+          if (https)
+            await this.ensureTlsReady(targetHost)
+          resolve()
+        }
+        catch (error) {
+          if (!this.locked)
+            await this.baseCleanup(restore)
+          reject(error)
+        }
+      }
+
       const setupCleanup = (): void => {
         process.on('SIGINT', async () => {
           if (this.stoped)
@@ -340,6 +398,10 @@ export class CaddyInstant {
             // caddy log
             // eslint-disable-next-line no-console
             showCaddyLog && line && console.info(line)
+            if (isCaddyReloadCancellation(line)) {
+              consola.info('Caddy restarted before TLS issuance completed; retrying.\n')
+              continue
+            }
             try {
               if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
                 if (line.includes('parsing caddyfile tokens')) {
@@ -360,13 +422,13 @@ export class CaddyInstant {
               consola.success('Detect added a new reverse proxy config, restarted.\n')
 
             if (line.includes('caddy proxying') || line.includes('serving initial'))
-              return resolve()
+              void resolveWhenReady()
           }
         })
 
         this._caddyChild!.stdout?.on('data', (_data) => {
           consola.info(_data.toString())
-          resolve()
+          void resolveWhenReady()
         })
 
         setupCleanup()
@@ -374,9 +436,17 @@ export class CaddyInstant {
       else {
         consola.info('Caddy is running in another process.')
 
-        setupCleanup()
-
-        return resolve()
+        void (async () => {
+          try {
+            if (https)
+              await this.ensureTlsReady(targetHost)
+            setupCleanup()
+            resolve()
+          }
+          catch (error) {
+            reject(error)
+          }
+        })()
       }
     })
   }
@@ -398,7 +468,7 @@ export class CaddyInstant {
       consola.fail('Restore host failed.\n')
     }
     if (!this.locked && !this.stoped) {
-      this._caddyChild?.kill()
+      await this.stopCaddy()
       try {
         await lockfile.unlock(caddyLockFilePath).catch(() => { })
         await unlink(caddyFilePath).catch(() => { })

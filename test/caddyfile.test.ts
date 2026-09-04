@@ -34,6 +34,7 @@ describe('caddyfile host grouping and route ordering', async () => {
     })
 
     const caddyfile = await genCaddyfile(ctx)
+    expect(caddyfile).toContain('auto_https disable_redirects ignore_loaded_certs')
     expect(caddyfile).toContain('example.com:80 {')
     expect(caddyfile).toContain('another.com:80 {')
 
