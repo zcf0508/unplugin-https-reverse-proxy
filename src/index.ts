@@ -123,17 +123,17 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 
       server.printUrls = () => vitePrintUrls(options, source, target, base, _printUrls)
 
-      // Setup SSE bridge for iOS Safari WSS workaround
+      // Setup SSE bridge for macOS/iOS Safari WSS workaround
       if (options.https) {
         setupHmrSseBridge(server)
         hmrSseBridgeActive = true
-        consola.info('HMR SSE bridge enabled for iOS Safari WSS workaround')
+        consola.info('HMR SSE bridge enabled for macOS/iOS Safari WSS workaround')
       }
     },
     transformIndexHtml() {
       if (!hmrSseBridgeActive)
         return []
-      // Inject client-side script to patch WebSocket on iOS Safari
+      // Inject client-side script to patch WebSocket on macOS/iOS Safari
       return [{
         tag: 'script',
         children: hmrSseBridgeClientScript,

@@ -134,14 +134,25 @@ function handleClientMessage(
   })
 }
 
+export function shouldUseHmrSseBridge(protocol: string, userAgent: string): boolean {
+  if (protocol !== 'https:')
+    return false
+
+  const isApplePlatform = /Macintosh|iPhone|iPad|iPod/.test(userAgent)
+  const isSafari = /Version\//.test(userAgent)
+    && /Safari\//.test(userAgent)
+    && !/(?:Chrome|Chromium|CriOS|Edg|EdgiOS|OPR|OPiOS|Firefox|FxiOS)\//.test(userAgent)
+
+  return isApplePlatform && isSafari
+}
+
 /**
- * Client-side script that patches WebSocket to use SSE+fetch on iOS Safari.
+ * Client-side script that patches WebSocket to use SSE+fetch on macOS/iOS Safari.
  * This script is injected via Vite's transformIndexHtml hook.
  */
 export const hmrSseBridgeClientScript = `
 (function() {
-  // Activate when served over HTTPS to bypass WSS self-signed cert issues
-  if (location.protocol !== 'https:') return;
+  if (!(${shouldUseHmrSseBridge.toString()})(location.protocol, navigator.userAgent)) return;
 
   var OriginalWebSocket = window.WebSocket;
 
