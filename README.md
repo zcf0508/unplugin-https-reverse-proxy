@@ -314,14 +314,38 @@ Please check [caddy path](https://github.com/zcf0508/unplugin-https-reverse-prox
 ## Usage
 
 ```bash
-# macOS
-sudo -E npm run dev # your dev script
-#    ^ `-E` is important
-
-# windows
-# use powershell as administrator
+# macOS / Linux / Windows
 npm run dev # your dev script
 ```
+
+Run it as your normal user. The plugin starts a small privileged helper that
+runs as administrator, and only that helper touches `/etc/hosts` and ports
+80/443. Your dev server, its caches and `node_modules` stay owned by you.
+
+On macOS and Linux the plugin asks for your password once when the dev server
+starts, then reuses the sudo credential for the rest of the session. If you
+already ran `sudo -v` in the same terminal, no prompt is shown.
+
+The helper restores the hosts entries by itself when the dev server exits,
+including when it is killed or crashes.
+
+### Granting the permission once (optional)
+
+To skip the password prompt entirely, allow the plugin's helper in
+`/etc/sudoers.d/` (edit with `sudo visudo -f /etc/sudoers.d/uhrp`):
+
+```
+yourname ALL=(root) NOPASSWD: /usr/bin/killall -HUP mDNSResponder
+yourname ALL=(root) NOPASSWD: /usr/bin/install -m 644 -o root -g wheel /tmp/uhrp-hosts.* /etc/hosts
+```
+
+The second rule only matters when the helper rewrites `/etc/hosts` through
+`install`; adjust the paths to your platform.
+
+### Windows
+
+Run `npm run dev` normally. Windows raises a UAC prompt once, when the helper
+is started through `Start-Process -Verb RunAs`.
 
 If your broswer shows a not trusted certificate warning, please check the keychain.
 
