@@ -1,50 +1,7 @@
-import { exec } from 'node:child_process'
-import { createServer } from 'node:net'
 import ora from 'ora'
 import { consola } from '../utils'
 
 let spinner: ora.Ora
-
-/**
- * @returns whether the port is in use
- */
-export function tryPort(port: number): Promise<boolean> {
-  return new Promise<boolean>((resolve, _reject) => {
-    try {
-      const server = createServer().listen(port)
-      server.on('listening', () => {
-        server.close()
-        resolve(false)
-      })
-      server.on('error', (err) => {
-        // @ts-expect-error err.code
-        if (err.code === 'EADDRINUSE')
-          resolve(true)
-        server.close()
-      })
-    }
-    catch {
-      resolve(true)
-    }
-  })
-}
-
-/**
- * npx free-port :port
- */
-export async function kill(port: number): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    exec(`npx @maxbo/free-port ${port} -s`, (err, stdout, _stderr) => {
-      if (err) {
-        reject(err)
-      }
-      else {
-        consola.log(stdout)
-        resolve()
-      }
-    })
-  })
-}
 
 function getNumber(number: number): string {
   if (number <= 0)

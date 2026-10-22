@@ -7,7 +7,7 @@ import c from 'picocolors'
 import { createUnplugin } from 'unplugin'
 import { CaddyInstant } from './caddy'
 import { hmrSseBridgeClientScript, setupHmrSseBridge } from './hmr-sse-bridge'
-import { consola, generateQrcode, getIpv4List, isAdmin, once } from './utils'
+import { consola, generateQrcode, getIpv4List, once } from './utils'
 
 let config: ResolvedConfig
 
@@ -96,10 +96,6 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       if (!enable)
         return
 
-      if (!isAdmin()) {
-        consola.warn('please run as administrator')
-        return
-      }
       if (!target) {
         consola.fail('please provide target')
         return
@@ -152,11 +148,6 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 
     if (!enable)
       return
-
-    if (!isAdmin()) {
-      consola.warn('please run as administrator')
-      return
-    }
 
     if (!target) {
       consola.fail('please provide target')
@@ -230,11 +221,6 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 
     if (!enable)
       return
-
-    if (!isAdmin()) {
-      consola.warn('please run as administrator')
-      return
-    }
 
     if (!target) {
       consola.fail('please provide target')
