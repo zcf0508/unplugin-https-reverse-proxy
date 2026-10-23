@@ -7,6 +7,8 @@ import c from 'picocolors'
 import { createUnplugin } from 'unplugin'
 import { CaddyInstant } from './caddy'
 import { hmrSseBridgeClientScript, setupHmrSseBridge } from './hmr-sse-bridge'
+import { isPrivilegeDenied, markPrivilegeDenied } from './privilege-state'
+import { PrivilegeDeniedError } from './privileged/launch'
 import { consola, generateQrcode, getIpv4List, once } from './utils'
 
 let config: ResolvedConfig
@@ -62,10 +64,15 @@ export const vitePrintUrls = once((
 ) => {
   _printUrls?.()
 
+  // Declined earlier in this process; a hot restart must not ask again.
+  if (isPrivilegeDenied())
+    return
+
   if (caddy)
     return
-  caddy = new CaddyInstant()
-  caddy.run(source, target, {
+  const instance = new CaddyInstant()
+  caddy = instance
+  instance.run(source, target, {
     base,
     ...options,
   }).then(async () => {
@@ -73,6 +80,16 @@ export const vitePrintUrls = once((
 
     consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
   }).catch((e) => {
+    // Declining the password is a choice, not a crash: drop the half-started
+    // instance so a later attempt can prompt again.
+    if (caddy === instance)
+      caddy = undefined as unknown as CaddyInstant
+    if (e instanceof PrivilegeDeniedError) {
+      markPrivilegeDenied()
+      consola.warn('reverse proxy skipped: administrator permission was not granted.')
+      consola.info('Restart the dev server to enable it again.')
+      return
+    }
     throw e
   })
 })
@@ -168,6 +185,9 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     }
     const source = `${devServer.host}:${devServer.port}`
 
+    if (isPrivilegeDenied())
+      return
+
     if (caddy)
       return
 
@@ -195,9 +215,10 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
       options.https = false
     }
 
-    caddy = new CaddyInstant()
+    const instance = new CaddyInstant()
+    caddy = instance
 
-    caddy.run(source, target, {
+    instance.run(source, target, {
       base,
       ...options,
     }).then(() => {
@@ -207,6 +228,14 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
         consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
       })
     }).catch((e) => {
+      if (caddy === instance)
+        caddy = undefined as unknown as CaddyInstant
+      if (e instanceof PrivilegeDeniedError) {
+        markPrivilegeDenied()
+        consola.warn('reverse proxy skipped: administrator permission was not granted.')
+        consola.info('Restart the dev server to enable it again.')
+        return
+      }
       throw e
     })
   },
@@ -243,10 +272,11 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 
     const source = `${devServer.host}:${devServer.port}`
 
-    if (caddy)
+    if (isPrivilegeDenied())
       return
 
-    caddy = new CaddyInstant()
+    if (caddy)
+      return
 
     let base = '/'
     const publicPath = compiler.options.output?.publicPath as unknown
@@ -258,7 +288,10 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
     if (base !== '/' && !base.endsWith('/'))
       base = `${base}/`
 
-    caddy.run(source, target, {
+    const instance = new CaddyInstant()
+    caddy = instance
+
+    instance.run(source, target, {
       base,
       ...options,
     }).then(async () => {
@@ -266,6 +299,14 @@ export const unpluginFactory: UnpluginFactory<Options> = options => ({
 
       consola.success(`  ${c.green('➜')}  ${c.bold('run caddy reverse proxy success')}: ${colorUrl(`${options.https ? 'https' : 'http'}://${target}${base}`)}`)
     }).catch((e) => {
+      if (caddy === instance)
+        caddy = undefined as unknown as CaddyInstant
+      if (e instanceof PrivilegeDeniedError) {
+        markPrivilegeDenied()
+        consola.warn('reverse proxy skipped: administrator permission was not granted.')
+        consola.info('Restart the dev server to enable it again.')
+        return
+      }
       throw e
     })
   },

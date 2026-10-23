@@ -132,16 +132,17 @@ function splitHostPort(addr: string): { host: string, port: string } {
 
 /** Injection point for tests: opens the privileged helper without sudo. */
 export interface CaddyDependencies {
-  openSession: (runtimeDir: string) => Promise<OpenedPrivilegedSession>
+  openSession: (runtimeDir: string, reason?: { target: string, https: boolean }) => Promise<OpenedPrivilegedSession>
 }
 
 const defaultDependencies: CaddyDependencies = {
-  openSession: runtimeDir => openPrivilegedSession(runtimeDir, {
+  openSession: (runtimeDir, reason) => openPrivilegedSession(runtimeDir, {
     log: message => consola.debug(message),
     // Both paths are fixed here, before any socket traffic: the privileged
     // helper must never execute something named in a request.
     caddyBin: caddyPath,
     caddyConfigPath: caddyFilePath,
+    reason,
   }),
 }
 
@@ -182,14 +183,14 @@ export class CaddyInstant {
    * reused across instances so a second dev server does not ask for a
    * password again.
    */
-  private async session(): Promise<OpenedPrivilegedSession> {
+  private async session(reason?: { target: string, https: boolean }): Promise<OpenedPrivilegedSession> {
     // A crashed helper leaves the cached client permanently disconnected; drop
     // it so the next call starts a fresh helper instead of failing forever.
     if (this._session && !this._session.client.connected)
       this._session = undefined
 
     if (!this._session)
-      this._session = await this.deps.openSession(TEMP_DIR)
+      this._session = await this.deps.openSession(TEMP_DIR, reason)
     return this._session
   }
 
@@ -313,10 +314,10 @@ export class CaddyInstant {
     if (!this.inited)
       await this.init()
 
-    const session = await this.session()
-
     const sourceHost = splitHostPort(source).host
     const targetHost = splitHostPort(target).host
+
+    const session = await this.session({ target: targetHost, https })
     await session.client.call('hosts.add', { ip: sourceHost, host: targetHost })
     consola.success('update host success\n')
 

@@ -82,6 +82,8 @@ export interface PrivilegedSessionOptions {
   caddyBin: string
   /** Caddyfile the helper may load. */
   caddyConfigPath: string
+  /** Shown before the password prompt so the request is not a surprise. */
+  reason?: { target: string, https: boolean }
 }
 
 /** Where Caddy keeps its PKI, per platform. */
@@ -113,6 +115,7 @@ export function openPrivilegedSession(
     // execute a path supplied over the socket.
     caddyBin: options.caddyBin,
     caddyConfigPath: options.caddyConfigPath,
+    reason: options.reason,
     log: options.log,
   })
 }

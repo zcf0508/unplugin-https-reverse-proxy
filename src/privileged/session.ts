@@ -24,6 +24,8 @@ export interface SessionScope {
   caddyBin: string
   /** Caddyfile the helper may load. */
   caddyConfigPath: string
+  /** Shown before the password prompt so the request is not a surprise. */
+  reason?: { target: string, https: boolean }
   log?: (message: string) => void
 }
 
@@ -81,6 +83,7 @@ export async function openHelperSession(scope: SessionScope): Promise<OpenedSess
     caddyStoragePath: scope.caddyStoragePath,
     caddyBin: scope.caddyBin,
     caddyConfigPath: scope.caddyConfigPath,
+    reason: scope.reason,
     log: scope.log,
   })
 

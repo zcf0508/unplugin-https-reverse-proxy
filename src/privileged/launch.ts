@@ -39,6 +39,25 @@ export interface LaunchOptions {
   caddyBin: string
   /** Caddyfile the helper is allowed to load. */
   caddyConfigPath: string
+  /** Shown before the password prompt so the request is not a surprise. */
+  reason?: { target: string, https: boolean }
+}
+
+/**
+ * Explains why a password is about to be requested. Without this the prompt
+ * appears out of nowhere in the middle of `npm run dev` and looks like something
+ * went wrong.
+ */
+export function describePasswordReason(target: string, https: boolean): string[] {
+  const port = https ? '443' : '80'
+  return [
+    `reverse proxy needs administrator permission for ${target}`,
+    `  · bind port ${port}${https ? ` for https://${target}` : ''}`,
+    `  · add ${target} to the hosts file`,
+    '',
+    'This is the only prompt; the rest of the dev server keeps running as you.',
+    'Press Ctrl+C at the prompt to skip the proxy and keep the dev server.',
+  ]
 }
 
 /**
@@ -47,20 +66,41 @@ export interface LaunchOptions {
  * The credential cache is keyed by terminal, so a later `sudo -n` only finds
  * this entry when the child stays in the same session. That is why the helper
  * is spawned without `detached`.
+ *
+ * Returns `denied` when the user dismissed the prompt, so the caller can keep
+ * the dev server running instead of treating it as a crash.
  */
-export function authenticateSudo(sudoCommand = 'sudo'): { ok: boolean, message?: string } {
+export function authenticateSudo(
+  sudoCommand = 'sudo',
+  options: { target?: string, https?: boolean } = {},
+): { ok: boolean, denied?: boolean, message?: string } {
   if (platform() === 'win32')
     return { ok: true }
 
   if (spawnSync(sudoCommand, ['-n', 'true'], { stdio: 'ignore' }).status === 0)
     return { ok: true }
 
+  if (options.target) {
+    for (const line of describePasswordReason(options.target, options.https ?? false))
+      process.stderr.write(`${line}\n`)
+    process.stderr.write('\n')
+  }
+
   if (spawnSync(sudoCommand, ['-v'], { stdio: 'inherit' }).status === 0)
     return { ok: true }
 
   return {
     ok: false,
+    denied: true,
     message: 'administrator permission is required to edit the hosts file and bind ports 80/443',
+  }
+}
+
+/** The user dismissed the password prompt; this is a choice, not a failure. */
+export class PrivilegeDeniedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'PrivilegeDeniedError'
   }
 }
 
@@ -92,9 +132,11 @@ export async function startPrivilegedHelper(options: LaunchOptions): Promise<Pri
   } = options
 
   if (!skipAuth && !direct) {
-    const auth = authenticateSudo(sudoCommand)
-    if (!auth.ok)
-      throw new Error(auth.message)
+    const auth = authenticateSudo(sudoCommand, options.reason)
+    if (!auth.ok) {
+      const message = auth.message ?? 'administrator permission is required'
+      throw auth.denied ? new PrivilegeDeniedError(message) : new Error(message)
+    }
   }
 
   const forwarded = collectForwardedEnv(env)
