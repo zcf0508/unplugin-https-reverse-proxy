@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -8,6 +9,22 @@ import { caddyPath, TEMP_DIR } from '../../src/caddy/constants'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const baseTestUrl = resolve(__dirname, '../')
+
+/**
+ * These cases start a real Caddy, so they need the privileges the plugin would
+ * ask a developer for: writing hosts and binding 80/443. Without them every
+ * case fails after its own timeout, which is noise rather than signal.
+ *
+ * Skipped instead of failed: the behaviour under test is already covered by the
+ * fake-session tests, and this file exists to catch adapter-level regressions.
+ */
+function hasSudoWithoutPrompt(): boolean {
+  if (process.platform === 'win32')
+    return false
+  return spawnSync('sudo', ['-n', 'true'], { stdio: 'ignore' }).status === 0
+}
+
+const canRunRealCaddy = hasSudoWithoutPrompt()
 
 beforeAll(async () => {
   if (existsSync(resolve(baseTestUrl, TEMP_DIR)))
@@ -24,7 +41,7 @@ describe('caddy', () => {
     expect(existsSync(caddyPath)).toBe(true)
   })
 
-  describe('reverse-proxy', () => {
+  describe.skipIf(!canRunRealCaddy)('reverse-proxy', () => {
     beforeEach(async () => {
       const baseUrl = resolve(baseTestUrl, '.uhrp')
 
