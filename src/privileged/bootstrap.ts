@@ -6,6 +6,7 @@ import { chmodSync, chownSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
+import { checkPrivilegedPath, describeRejection } from './path-guard'
 import { attachSocket, createHelperRuntime, createNodeHelperDeps } from './server'
 
 export interface HelperBootstrapOptions {
@@ -16,6 +17,8 @@ export interface HelperBootstrapOptions {
   caddyBin: string
   /** Caddyfile to load; fixed for the same reason. */
   caddyConfigPath: string
+  /** Admin API socket; used by `ca.trust` instead of the TCP default. */
+  caddyAdminSocket?: string
   caddyCwd?: string
   caddyEnv?: Record<string, string>
   /**
@@ -66,11 +69,25 @@ export const DEFAULT_IDLE_TIMEOUT_MS = 30_000
 export async function startHelper(options: HelperBootstrapOptions): Promise<RunningHelper> {
   const { socketPath, token } = options
   const log = options.log ?? ((message: string) => process.stdout.write(`[uhrp-helper] ${message}\n`))
+
+  // The binary and the config travel in as arguments from a process running as
+  // the developer. Refuse them when they can be rewritten by someone else:
+  // running as root, a swapped binary or Caddyfile is a local privilege gain.
+  for (const check of [
+    checkPrivilegedPath(options.caddyBin, { label: 'Caddy binary', ownerUid: options.ownerUid }),
+    checkPrivilegedPath(options.caddyConfigPath, { label: 'Caddyfile', ownerUid: options.ownerUid }),
+  ]) {
+    if (check) {
+      log(describeRejection(check))
+      throw new Error(describeRejection(check))
+    }
+  }
   const deps = options.deps ?? createNodeHelperDeps({
     hostsPath: options.hostsPath,
     log,
     caddyBin: options.caddyBin,
     caddyConfigPath: options.caddyConfigPath,
+    caddyAdminSocket: options.caddyAdminSocket,
     caddyCwd: options.caddyCwd,
     caddyEnv: options.caddyEnv,
     caddyStoragePath: options.caddyStoragePath,

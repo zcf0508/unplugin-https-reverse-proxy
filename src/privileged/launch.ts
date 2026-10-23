@@ -39,6 +39,8 @@ export interface LaunchOptions {
   caddyBin: string
   /** Caddyfile the helper is allowed to load. */
   caddyConfigPath: string
+  /** Admin API socket the helper talks to when installing the CA. */
+  caddyAdminSocket?: string
   /** Shown before the password prompt so the request is not a surprise. */
   reason?: { target: string, https: boolean }
 }
@@ -251,6 +253,7 @@ export async function startPrivilegedHelper(options: LaunchOptions): Promise<Pri
     options.caddyBin,
     '--caddy-config',
     options.caddyConfigPath,
+    ...(options.caddyAdminSocket ? ['--caddy-admin', options.caddyAdminSocket] : []),
   ]
 
   let child: ReturnType<typeof spawn> | undefined

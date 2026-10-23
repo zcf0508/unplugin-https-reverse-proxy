@@ -10,6 +10,7 @@ interface ParsedArgs {
   ownerUid?: number
   ownerGid?: number
   caddyStorage?: string
+  caddyAdmin?: string
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -21,6 +22,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let ownerUid: number | undefined
   let ownerGid: number | undefined
   let caddyStorage: string | undefined
+  let caddyAdmin: string | undefined
 
   for (let index = 0; index < argv.length; index++) {
     const current = argv[index]
@@ -40,6 +42,8 @@ function parseArgs(argv: string[]): ParsedArgs {
       ownerGid = Number(argv[++index])
     else if (current === '--caddy-storage')
       caddyStorage = argv[++index] ?? undefined
+    else if (current === '--caddy-admin')
+      caddyAdmin = argv[++index] ?? undefined
   }
 
   if (!socket || !token)
@@ -56,6 +60,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     ownerUid: Number.isInteger(ownerUid) ? ownerUid : undefined,
     ownerGid: Number.isInteger(ownerGid) ? ownerGid : undefined,
     caddyStorage,
+    caddyAdmin,
   }
 }
 
@@ -78,6 +83,7 @@ async function main(): Promise<void> {
     ownerUid: args.ownerUid,
     ownerGid: args.ownerGid,
     caddyStoragePath: args.caddyStorage,
+    caddyAdminSocket: args.caddyAdmin,
     caddyEnv: {
       HOME: process.env.HOME ?? '',
       // Keep Caddy's storage next to the invoking user's home even though the

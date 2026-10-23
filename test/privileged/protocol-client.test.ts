@@ -89,6 +89,9 @@ describe('helper over a socket', () => {
       token: 'secret-token',
       caddyBin: process.execPath,
       caddyConfigPath: hostsPath,
+      // The path guard checks ownership; this test runs without sudo, so the
+      // invoking user owns both paths.
+      ownerUid: process.getuid?.(),
       deps: helperDeps(hostsPath),
       log: () => {},
     })
@@ -115,6 +118,8 @@ describe('helper over a socket', () => {
       token: 'sweep',
       caddyBin: process.execPath,
       caddyConfigPath: hostsPath,
+      // The path guard checks ownership; this test runs without sudo.
+      ownerUid: process.getuid?.(),
       deps: helperDeps(hostsPath),
       log: () => {},
     })
@@ -132,6 +137,8 @@ describe('helper over a socket', () => {
       token: 'right',
       caddyBin: process.execPath,
       caddyConfigPath: hostsPath,
+      // The path guard checks ownership; this test runs without sudo.
+      ownerUid: process.getuid?.(),
       deps: helperDeps(hostsPath),
       log: () => {},
     })
@@ -151,6 +158,8 @@ describe('helper over a socket', () => {
       token: 'failing',
       caddyBin: process.execPath,
       caddyConfigPath: hostsPath,
+      // The path guard checks ownership; this test runs without sudo.
+      ownerUid: process.getuid?.(),
       deps: {
         ...helperDeps(hostsPath),
         writeHosts: () => {
@@ -177,6 +186,8 @@ describe('helper over a socket', () => {
       token: 'socket',
       caddyBin: process.execPath,
       caddyConfigPath: hostsPath,
+      // The path guard checks ownership; this test runs without sudo.
+      ownerUid: process.getuid?.(),
       deps: helperDeps(hostsPath),
       log: () => {},
     })

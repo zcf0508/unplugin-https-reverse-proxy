@@ -342,6 +342,8 @@ export interface NodeHelperDepsOptions {
   hostsPath?: string
   caddyBin: string
   caddyConfigPath: string
+  /** Admin API socket; `ca.trust` talks to it instead of the TCP default. */
+  caddyAdminSocket?: string
   caddyCwd?: string
   caddyEnv?: Record<string, string>
   /** Caddy storage directory; handed back to the user when Caddy stops. */
@@ -391,13 +393,19 @@ async function reclaimTree(target: string, uid: number, gid: number): Promise<st
 }
 
 /** Installs the Caddy root CA using helper-owned commands. */
-async function trustLocalCaWithSystemTools(caddyBin: string): Promise<{ trusted: boolean, output: string }> {
+async function trustLocalCaWithSystemTools(
+  caddyBin: string,
+  adminSocket: string | undefined,
+): Promise<{ trusted: boolean, output: string }> {
   // `caddy trust` reads the CA through the admin API, which only exists while
-  // Caddy is serving; the plugin calls this after Caddy is up.
+  // Caddy is serving; the plugin calls this after Caddy is up. The admin API is
+  // a unix socket when the template enabled one, so the address follows it
+  // instead of the old TCP default.
+  const address = adminSocket ? `unix/${adminSocket}` : '127.0.0.1:2019'
   try {
     const { stdout, stderr } = await execFileAsync(
       caddyBin,
-      ['trust', '--ca', 'local', '--address', '127.0.0.1:2019'],
+      ['trust', '--ca', 'local', '--address', address],
       { timeout: 120_000 },
     )
     return { trusted: true, output: `${stdout}${stderr}`.trim() }
@@ -475,7 +483,7 @@ export function createNodeHelperDeps(options: NodeHelperDepsOptions): HelperDeps
     caddyConfigPath: options.caddyConfigPath,
     caddyCwd: options.caddyCwd ?? process.cwd(),
     caddyEnv: options.caddyEnv ?? {},
-    trustLocalCa: () => trustLocalCaWithSystemTools(options.caddyBin),
+    trustLocalCa: () => trustLocalCaWithSystemTools(options.caddyBin, options.caddyAdminSocket),
     caddyStoragePath: options.caddyStoragePath,
     storageOwner: options.storageOwner,
     startCaddy: (emit) => {

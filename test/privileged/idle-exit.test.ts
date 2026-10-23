@@ -12,6 +12,8 @@ import { startHelper } from '../../src/privileged/bootstrap'
 function createDeps(dir: string): HelperDeps {
   const hostsPath = join(dir, 'hosts')
   writeFileSync(hostsPath, '127.0.0.1\tlocalhost\n')
+  // The helper refuses to start when its Caddyfile is missing.
+  writeFileSync(join(dir, 'Caddyfile'), '')
 
   return {
     readHosts: () => readFileSync(hostsPath, 'utf8'),

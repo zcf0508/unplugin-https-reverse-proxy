@@ -5,6 +5,7 @@ describe('caddyfile host grouping and route ordering', async () => {
   it('should group same host and order routes by base length desc', async () => {
     const ctx = validateTemplateContext({
       caddy_root: '/tmp',
+      admin_socket: '/tmp/caddy-admin.sock',
       proxies: [
         {
           target: 'example.com',
@@ -43,5 +44,20 @@ describe('caddyfile host grouping and route ordering', async () => {
     expect(posApiV2).toBeGreaterThan(-1)
     expect(posApi).toBeGreaterThan(-1)
     expect(posApiV2).toBeLessThan(posApi)
+  })
+
+  it('binds the admin API to a unix socket', async () => {
+    const ctx = validateTemplateContext({
+      caddy_root: '/tmp',
+      admin_socket: '/tmp/uhrp/caddy-admin.sock',
+      proxies: [],
+    })
+
+    const caddyfile = await genCaddyfile(ctx)
+
+    // Caddy runs as root; a TCP admin API would let any local user reconfigure
+    // it with no further check.
+    expect(caddyfile).toContain('admin unix//tmp/uhrp/caddy-admin.sock')
+    expect(caddyfile).not.toContain('localhost:2019')
   })
 })

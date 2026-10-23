@@ -25,6 +25,8 @@ export interface SessionScope {
   caddyBin: string
   /** Caddyfile the helper may load. */
   caddyConfigPath: string
+  /** Admin API socket; used by `ca.trust` instead of the TCP default. */
+  caddyAdminSocket?: string
   /** Shown before the password prompt so the request is not a surprise. */
   reason?: { target: string, https: boolean }
   log?: (message: string) => void
@@ -108,6 +110,7 @@ async function startNew(socketPath: string, scope: SessionScope): Promise<Opened
     caddyStoragePath: scope.caddyStoragePath,
     caddyBin: scope.caddyBin,
     caddyConfigPath: scope.caddyConfigPath,
+    caddyAdminSocket: scope.caddyAdminSocket,
     reason: scope.reason,
     log: scope.log,
   })

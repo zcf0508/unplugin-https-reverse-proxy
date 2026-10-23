@@ -82,6 +82,8 @@ export interface PrivilegedSessionOptions {
   caddyBin: string
   /** Caddyfile the helper may load. */
   caddyConfigPath: string
+  /** Admin API socket; `ca.trust` talks to it instead of the TCP default. */
+  caddyAdminSocket?: string
   /** Shown before the password prompt so the request is not a surprise. */
   reason?: { target: string, https: boolean }
 }
@@ -115,6 +117,7 @@ export function openPrivilegedSession(
     // execute a path supplied over the socket.
     caddyBin: options.caddyBin,
     caddyConfigPath: options.caddyConfigPath,
+    caddyAdminSocket: options.caddyAdminSocket,
     reason: options.reason,
     log: options.log,
   })

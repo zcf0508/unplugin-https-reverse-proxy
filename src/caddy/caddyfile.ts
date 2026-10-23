@@ -12,6 +12,7 @@ export const ProxyType = type({
 
 const CaddyContext = type({
   caddy_root: 'string',
+  admin_socket: 'string',
   proxies: ProxyType.array(),
 })
 
@@ -27,6 +28,7 @@ export const caddyTemplate = `{
   debug
   auto_https disable_redirects ignore_loaded_certs
   skip_install_trust
+  admin unix/{{ admin_socket }}
 }
 
 :7601 {
