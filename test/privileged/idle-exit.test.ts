@@ -50,6 +50,8 @@ describe('idle exit', () => {
       caddyBin: '/usr/bin/false',
       caddyConfigPath: join(dir, 'Caddyfile'),
       idleTimeoutMs: 100,
+      // In-process helper: it must release the socket without ending the runner.
+      exitOnIdle: false,
       deps: createDeps(dir),
       log: () => {},
     })
@@ -74,6 +76,7 @@ describe('idle exit', () => {
       caddyBin: '/usr/bin/false',
       caddyConfigPath: join(dir, 'Caddyfile'),
       idleTimeoutMs: 100,
+      exitOnIdle: false,
       deps: createDeps(dir),
       log: () => {},
     })

@@ -35,6 +35,14 @@ export interface HelperBootstrapOptions {
    * sooner than this and still reuses the running helper.
    */
   idleTimeoutMs?: number
+  /**
+   * Whether the idle timer may end this process.
+   *
+   * True for the real helper, which owns its process. False when `startHelper`
+   * is called in-process (tests): exiting there would take the caller down
+   * with it.
+   */
+  exitOnIdle?: boolean
   deps?: HelperDeps
   log?: (message: string) => void
 }
@@ -83,6 +91,9 @@ export async function startHelper(options: HelperBootstrapOptions): Promise<Runn
 
   const connections = new Set<Socket>()
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS
+  // The real helper is a process of its own and may end itself. When this runs
+  // inside a host process (tests), only the socket is released.
+  const exitOnIdle = options.exitOnIdle ?? true
   let idleTimer: ReturnType<typeof setTimeout> | undefined
 
   const stopIdleTimer = (): void => {
@@ -171,6 +182,12 @@ export async function startHelper(options: HelperBootstrapOptions): Promise<Runn
 
       log('no clients left; shutting down')
       removeOwnSocket(socketPath, token)
+
+      if (!exitOnIdle) {
+        server.close()
+        return
+      }
+
       server.close(() => process.exit(0))
       // A listener with no clients closes synchronously, but keep a backstop so
       // the process cannot linger if a close callback never arrives.
