@@ -13,12 +13,41 @@ function resolvePath(path: string): string {
   return path
 }
 
-export const TEMP_DIR = resolvePath(process.env.UHRP_CADDY_PATH || process.env.TEMP || process.env.TMPDIR || '/tmp')
+/**
+ * Directory for the Caddy binary, Caddyfile and the admin socket.
+ *
+ * The Caddy binary is executed as root, so this must not be a directory other
+ * users can write to. macOS gives every user a private `TMPDIR`, and `TEMP` on
+ * Windows is per-user too. On Linux `TMPDIR` is usually unset and `/tmp` is
+ * world-writable (sticky bit only prevents deleting other users' files, not
+ * creating `/tmp/caddy` first), so the fallback goes under the user's own cache
+ * directory instead.
+ */
+function defaultTempDir(): string {
+  const fromEnv = process.env.TEMP || process.env.TMPDIR
+  if (fromEnv)
+    return resolvePath(fromEnv)
+  if (process.platform === 'linux')
+    return join(process.env.XDG_CACHE_HOME || join(os.homedir(), '.cache'), 'uhrp')
+  return '/tmp'
+}
+
+export const TEMP_DIR = resolvePath(process.env.UHRP_CADDY_PATH || defaultTempDir())
 export const caddyPath = join(TEMP_DIR, `caddy${process.platform === 'win32' ? '.exe' : ''}`)
 export const caddyFilePath = join(TEMP_DIR, 'CADDYFILE')
 
 export const caddyConfigPath = join(TEMP_DIR, '.CADDYFILE.config.json')
 export const caddyLockFilePath = join(TEMP_DIR, 'caddylock')
+
+/**
+ * Admin API socket, shared by every project using this helper.
+ *
+ * Caddy runs as root, so its admin API must not listen on a TCP port any local
+ * user can reach: `POST /load` there reconfigures the proxy with no further
+ * check. A unix socket inside the runtime directory is reachable only by whoever
+ * can open that directory, and the directory is private on macOS.
+ */
+export const caddyAdminSocketPath = join(TEMP_DIR, 'caddy-admin.sock')
 
 export const supportList = [
   {

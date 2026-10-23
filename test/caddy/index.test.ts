@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { unlink } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -8,6 +9,22 @@ import { caddyPath, TEMP_DIR } from '../../src/caddy/constants'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const baseTestUrl = resolve(__dirname, '../')
+
+/**
+ * These cases start a real Caddy, so they need the privileges the plugin would
+ * ask a developer for: writing hosts and binding 80/443. Without them every
+ * case fails after its own timeout, which is noise rather than signal.
+ *
+ * Skipped instead of failed: the behaviour under test is already covered by the
+ * fake-session tests, and this file exists to catch adapter-level regressions.
+ */
+function hasSudoWithoutPrompt(): boolean {
+  if (process.platform === 'win32')
+    return false
+  return spawnSync('sudo', ['-n', 'true'], { stdio: 'ignore' }).status === 0
+}
+
+const canRunRealCaddy = hasSudoWithoutPrompt()
 
 beforeAll(async () => {
   if (existsSync(resolve(baseTestUrl, TEMP_DIR)))
@@ -24,22 +41,17 @@ describe('caddy', () => {
     expect(existsSync(caddyPath)).toBe(true)
   })
 
-  describe('reverse-proxy', () => {
+  describe.skipIf(!canRunRealCaddy)('reverse-proxy', () => {
     beforeEach(async () => {
       const baseUrl = resolve(baseTestUrl, '.uhrp')
 
       if (existsSync(resolve(baseUrl, 'CADDYFILE')))
         await unlink(resolve(baseUrl, 'CADDYFILE'))
-      if (existsSync(resolve(baseUrl, 'caddylock')))
-        await unlink(resolve(baseUrl, 'caddylock'))
     })
 
     it.sequential(':80', async () => {
       const caddy = new CaddyInstant()
-      expect(caddy.checkLock()).toBe(false)
       await caddy.run('127.0.0.1:8080', 'test-1.abc.com')
-
-      expect(caddy.checkLock()).toBe(true)
 
       const caddyfile = await caddy.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
@@ -106,12 +118,9 @@ describe('caddy', () => {
 
     it.sequential(':443', async () => {
       const caddy = new CaddyInstant()
-      expect(caddy.checkLock()).toBe(false)
       await caddy.run('127.0.0.1:8080', 'test-2.abc.com', {
         https: true,
       })
-
-      expect(caddy.checkLock()).toBe(true)
 
       const caddyfile = await caddy.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
@@ -177,10 +186,7 @@ describe('caddy', () => {
 
     it.sequential('both', async () => {
       const caddy_80 = new CaddyInstant()
-      expect(caddy_80.checkLock()).toBe(false)
       await caddy_80.run('127.0.0.1:8080', 'test-3.abc.com')
-
-      expect(caddy_80.checkLock()).toBe(true)
 
       let caddyfile = await caddy_80.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
@@ -243,13 +249,10 @@ describe('caddy', () => {
       `)
 
       const caddy_443 = new CaddyInstant()
-      expect(caddy_443.checkLock()).toBe(true)
       await caddy_443.run('127.0.0.1:8080', 'test-4.abc.com', {
         https: true,
         healthCheck: false,
       })
-
-      expect(caddy_443.checkLock()).toBe(true)
 
       await sleep(50)
       caddyfile = await caddy_443.getCaddyfile()
@@ -328,13 +331,10 @@ describe('caddy', () => {
 
     it.sequential(':443 with base', async () => {
       const caddy = new CaddyInstant()
-      expect(caddy.checkLock()).toBe(false)
       await caddy.run('127.0.0.1:8080', 'test-2.abc.com', {
         https: true,
         base: '/test/',
       })
-
-      expect(caddy.checkLock()).toBe(true)
 
       const caddyfile = await caddy.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
@@ -401,15 +401,11 @@ describe('caddy', () => {
 
     it.sequential('same host different base no override', async () => {
       const caddyA = new CaddyInstant()
-      expect(caddyA.checkLock()).toBe(false)
       await caddyA.run('127.0.0.1:8081', 'test-5.abc.com', {
         base: '/app',
       })
 
-      expect(caddyA.checkLock()).toBe(true)
-
       const caddyB = new CaddyInstant()
-      expect(caddyB.checkLock()).toBe(true)
       await caddyB.run('127.0.0.1:8082', 'test-5.abc.com', {
         base: '/api',
       })

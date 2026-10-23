@@ -2,7 +2,7 @@ import type { Options } from './types'
 import process from 'node:process'
 import { defineNuxtModule } from '@nuxt/kit'
 import { vitePrintUrls } from '.'
-import { consola, isAdmin } from './utils'
+import { consola } from './utils'
 import '@nuxt/schema'
 
 export interface ModuleOptions extends Options {
@@ -25,11 +25,6 @@ export default defineNuxtModule<ModuleOptions>({
 
     if (!enable)
       return
-
-    if (!isAdmin()) {
-      consola.warn('please run as administrator')
-      return
-    }
 
     if (!target) {
       consola.fail('please provide target')
