@@ -36,4 +36,17 @@ jobs:
         run: |
           pnpm run build
           TARBALL=$(pnpm pack --pack-destination "$RUNNER_TEMP" | tail -n 1)
-          npm publish "$TARBALL" --access public
+          VERSION=$(node -p "require('./package.json').version")
+
+          # A prerelease must name its dist-tag explicitly; without one npm 11
+          # refuses to publish. Using `beta` also keeps `latest` on the stable
+          # line so a plain install does not pick up a beta.
+          if [[ "$VERSION" == *-* ]]; then
+            DIST_TAG="${VERSION#*-}"
+            DIST_TAG="${DIST_TAG%%.*}"
+            echo "publishing $VERSION under dist-tag $DIST_TAG"
+            npm publish "$TARBALL" --access public --tag "$DIST_TAG"
+          else
+            echo "publishing $VERSION as latest"
+            npm publish "$TARBALL" --access public
+          fi
