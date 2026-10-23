@@ -2,8 +2,9 @@ import type { Socket } from 'node:net'
 import type { ClientHandshake } from './protocol'
 import type { HelperDeps, HelperRuntime } from './server'
 import { Buffer } from 'node:buffer'
-import { chmodSync, chownSync, rmSync } from 'node:fs'
+import { chmodSync, chownSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { attachSocket, createHelperRuntime, createNodeHelperDeps } from './server'
 
@@ -26,6 +27,14 @@ export interface HelperBootstrapOptions {
   ownerGid?: number
   /** Caddy storage directory, handed back to the owner when Caddy stops. */
   caddyStoragePath?: string
+  /**
+   * How long the helper lingers with no clients before exiting.
+   *
+   * Kept short so a helper nobody is using does not stay on the machine as an
+   * idle root process. Within the same terminal a restart usually happens
+   * sooner than this and still reuses the running helper.
+   */
+  idleTimeoutMs?: number
   deps?: HelperDeps
   log?: (message: string) => void
 }
@@ -36,6 +45,9 @@ export interface RunningHelper {
 }
 
 const HANDSHAKE_TIMEOUT_MS = 120_000
+
+/** Default idle lifetime after the last client leaves. */
+export const DEFAULT_IDLE_TIMEOUT_MS = 30_000
 
 /**
  * Runs the privileged side of the plugin: listens on a local socket, accepts
@@ -70,12 +82,26 @@ export async function startHelper(options: HelperBootstrapOptions): Promise<Runn
   catch {}
 
   const connections = new Set<Socket>()
+  const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS
+  let idleTimer: ReturnType<typeof setTimeout> | undefined
+
+  const stopIdleTimer = (): void => {
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+      idleTimer = undefined
+    }
+  }
 
   const server = createServer((socket) => {
     let buffer = ''
     let authenticated = false
+    stopIdleTimer()
     connections.add(socket)
-    socket.on('close', () => connections.delete(socket))
+    socket.on('close', () => {
+      connections.delete(socket)
+      if (connections.size === 0)
+        scheduleIdleExit()
+    })
 
     const timer = setTimeout(() => {
       if (!authenticated)
@@ -127,10 +153,40 @@ export async function startHelper(options: HelperBootstrapOptions): Promise<Runn
     socket.on('error', () => {})
   })
 
+  /**
+   * Exits once nobody needs the helper.
+   *
+   * Without this, every dev server that ever ran leaves a root process behind.
+   * The socket and token are removed too, but only while they still carry this
+   * process's identity: a newer helper may already own them.
+   */
+  function scheduleIdleExit(): void {
+    if (idleTimer || connections.size > 0)
+      return
+
+    idleTimer = setTimeout(() => {
+      idleTimer = undefined
+      if (connections.size > 0)
+        return
+
+      log('no clients left; shutting down')
+      removeOwnSocket(socketPath, token)
+      server.close(() => process.exit(0))
+      // A listener with no clients closes synchronously, but keep a backstop so
+      // the process cannot linger if a close callback never arrives.
+      setTimeout(() => process.exit(0), 1000).unref?.()
+    }, idleTimeoutMs)
+    idleTimer.unref?.()
+  }
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(socketPath, () => resolve())
   })
+
+  // A helper nobody ever connects to is as useless as one whose clients left:
+  // start the timer now so a failed handshake does not strand it.
+  scheduleIdleExit()
 
   try {
     // The client is not root: hand the socket back to the developer and keep it
@@ -161,6 +217,31 @@ export async function startHelper(options: HelperBootstrapOptions): Promise<Runn
       })
     },
   }
+}
+
+/**
+ * Removes this helper's socket and token, but only if they are still its own.
+ *
+ * A newer helper may have taken both over; deleting them then would break a
+ * session this process never served.
+ */
+function removeOwnSocket(socketPath: string, token: string): void {
+  if (process.platform === 'win32')
+    return
+
+  try {
+    const tokensDir = dirname(socketPath)
+    const tokenFile = join(tokensDir, 'helper.token')
+    const current = existsSync(tokenFile) ? readFileSync(tokenFile, 'utf8').trim() : undefined
+    if (current === token)
+      rmSync(tokenFile, { force: true })
+  }
+  catch {}
+
+  try {
+    rmSync(socketPath, { force: true })
+  }
+  catch {}
 }
 
 /** Sockets left behind by a killed helper cannot be reused; remove them first. */
