@@ -146,13 +146,18 @@ function runPrompt(sudoCommand: string): Promise<{ status: number | null, signal
 }
 
 /**
- * Returns the terminal to cooked mode for the duration of the prompt.
+ * Gives the terminal to `sudo` for the duration of the prompt.
  *
- * Vite leaves stdin in raw mode while it listens for its own shortcuts. In raw
- * mode the tty does no line editing, so the Enter that should submit the
- * password only reaches sudo as a bare carriage return and the read does not
- * complete. The returned function puts the previous state back, so Vite's
- * shortcuts keep working afterwards.
+ * Vite keeps stdin in raw mode with a `data` listener attached, so that every
+ * keystroke reaches its shortcut handler. Two things break the password read:
+ *
+ * 1. Raw mode does no line editing, so Enter never terminates the line sudo is
+ *    waiting for.
+ * 2. The `data` listener is resumed, so it consumes the characters before sudo
+ *    can see them. sudo then reads nothing and reports a wrong password.
+ *
+ * Both are undone here and restored afterwards, so Vite's shortcuts keep
+ * working once the prompt is over.
  */
 function takeBackTerminal(): () => void {
   const stdin = process.stdin
@@ -160,20 +165,28 @@ function takeBackTerminal(): () => void {
     return () => {}
 
   const wasRaw = stdin.isRaw === true
+
+  // `pause` detaches the stream from the tty without removing Vite's listener,
+  // so the same handler still works when the stream is resumed later.
+  stdin.pause()
+
   try {
     stdin.setRawMode(false)
   }
   catch {
+    stdin.resume()
     return () => {}
   }
 
   return () => {
-    if (!wasRaw)
-      return
-    try {
-      stdin.setRawMode(true)
+    if (wasRaw) {
+      try {
+        stdin.setRawMode(true)
+      }
+      catch {}
     }
-    catch {}
+    // Resume last: Vite's listener is still attached and expects a live stream.
+    stdin.resume()
   }
 }
 
