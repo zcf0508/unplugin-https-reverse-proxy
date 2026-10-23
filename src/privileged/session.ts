@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { platform } from 'node:os'
 import { join } from 'node:path'
+import * as lockfile from 'proper-lockfile'
 import { connectExistingHelper, createHelperToken, startPrivilegedHelper } from './launch'
 
 export interface SessionScope {
@@ -50,26 +51,50 @@ export function sessionSocketPath(runtimeDir: string): string {
  * Connects to the helper already serving this runtime directory, or starts a
  * new one. Reuse matters for multi-instance dev servers: the second instance
  * attaches to the running Caddy instead of asking for a password again.
+ *
+ * The check-then-start sequence runs under a lock. Two projects starting at the
+ * same moment would otherwise both fail to find a socket, both spawn a helper,
+ * and the second would delete the first one's socket while it was still
+ * serving.
  */
 export async function openHelperSession(scope: SessionScope): Promise<OpenedSession> {
   const socketPath = sessionSocketPath(scope.runtimeDir)
+  const release = await acquireStartLock(scope.runtimeDir)
 
-  if (existsSync(socketPath) || platform() === 'win32') {
-    const token = await readToken(scope.runtimeDir)
-    if (token) {
-      const reused = await connectExistingHelper(socketPath, token)
-      if (reused) {
-        return {
-          client: reused,
-          reused: true,
-          close: async () => {
-            await reused.close()
-          },
-        }
-      }
-    }
+  try {
+    const reused = await tryReuse(socketPath, scope)
+    if (reused)
+      return reused
+
+    return await startNew(socketPath, scope)
   }
+  finally {
+    release()
+  }
+}
 
+async function tryReuse(socketPath: string, scope: SessionScope): Promise<OpenedSession | undefined> {
+  if (!existsSync(socketPath) && platform() !== 'win32')
+    return undefined
+
+  const token = await readToken(scope.runtimeDir)
+  if (!token)
+    return undefined
+
+  const reused = await connectExistingHelper(socketPath, token)
+  if (!reused)
+    return undefined
+
+  return {
+    client: reused,
+    reused: true,
+    close: async () => {
+      await reused.close()
+    },
+  }
+}
+
+async function startNew(socketPath: string, scope: SessionScope): Promise<OpenedSession> {
   const token = createHelperToken()
   const started = await startPrivilegedHelper({
     socketPath,
@@ -95,6 +120,30 @@ export async function openHelperSession(scope: SessionScope): Promise<OpenedSess
     close: async () => {
       await started.close()
     },
+  }
+}
+
+/**
+ * Serialises "is a helper running? if not, start one" across processes.
+ *
+ * The lock file is separate from the socket: the socket only exists once a
+ * helper is listening, while this lock guards the window before that.
+ */
+async function acquireStartLock(runtimeDir: string): Promise<() => void> {
+  const lockPath = join(runtimeDir, 'helper.start.lock')
+  try {
+    await writeFile(lockPath, '', { flag: 'a' })
+  }
+  catch {}
+
+  const release = await lockfile.lock(lockPath, {
+    realpath: false,
+    stale: 30_000,
+    retries: { retries: 100, minTimeout: 50, maxTimeout: 200 },
+  })
+
+  return () => {
+    void release().catch(() => {})
   }
 }
 
