@@ -30,16 +30,11 @@ describe('caddy', () => {
 
       if (existsSync(resolve(baseUrl, 'CADDYFILE')))
         await unlink(resolve(baseUrl, 'CADDYFILE'))
-      if (existsSync(resolve(baseUrl, 'caddylock')))
-        await unlink(resolve(baseUrl, 'caddylock'))
     })
 
     it.sequential(':80', async () => {
       const caddy = new CaddyInstant()
-      expect(caddy.checkLock()).toBe(false)
       await caddy.run('127.0.0.1:8080', 'test-1.abc.com')
-
-      expect(caddy.checkLock()).toBe(true)
 
       const caddyfile = await caddy.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
@@ -106,12 +101,9 @@ describe('caddy', () => {
 
     it.sequential(':443', async () => {
       const caddy = new CaddyInstant()
-      expect(caddy.checkLock()).toBe(false)
       await caddy.run('127.0.0.1:8080', 'test-2.abc.com', {
         https: true,
       })
-
-      expect(caddy.checkLock()).toBe(true)
 
       const caddyfile = await caddy.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
@@ -177,10 +169,7 @@ describe('caddy', () => {
 
     it.sequential('both', async () => {
       const caddy_80 = new CaddyInstant()
-      expect(caddy_80.checkLock()).toBe(false)
       await caddy_80.run('127.0.0.1:8080', 'test-3.abc.com')
-
-      expect(caddy_80.checkLock()).toBe(true)
 
       let caddyfile = await caddy_80.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
@@ -243,13 +232,10 @@ describe('caddy', () => {
       `)
 
       const caddy_443 = new CaddyInstant()
-      expect(caddy_443.checkLock()).toBe(true)
       await caddy_443.run('127.0.0.1:8080', 'test-4.abc.com', {
         https: true,
         healthCheck: false,
       })
-
-      expect(caddy_443.checkLock()).toBe(true)
 
       await sleep(50)
       caddyfile = await caddy_443.getCaddyfile()
@@ -328,13 +314,10 @@ describe('caddy', () => {
 
     it.sequential(':443 with base', async () => {
       const caddy = new CaddyInstant()
-      expect(caddy.checkLock()).toBe(false)
       await caddy.run('127.0.0.1:8080', 'test-2.abc.com', {
         https: true,
         base: '/test/',
       })
-
-      expect(caddy.checkLock()).toBe(true)
 
       const caddyfile = await caddy.getCaddyfile()
       expect(caddyfile).toMatchInlineSnapshot(`
@@ -401,15 +384,11 @@ describe('caddy', () => {
 
     it.sequential('same host different base no override', async () => {
       const caddyA = new CaddyInstant()
-      expect(caddyA.checkLock()).toBe(false)
       await caddyA.run('127.0.0.1:8081', 'test-5.abc.com', {
         base: '/app',
       })
 
-      expect(caddyA.checkLock()).toBe(true)
-
       const caddyB = new CaddyInstant()
-      expect(caddyB.checkLock()).toBe(true)
       await caddyB.run('127.0.0.1:8082', 'test-5.abc.com', {
         base: '/api',
       })

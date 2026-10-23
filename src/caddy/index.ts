@@ -1,20 +1,18 @@
 import type { Buffer } from 'node:buffer'
 import type { OpenedPrivilegedSession } from './privileged'
 import { execFile } from 'node:child_process'
-import { chmodSync, createWriteStream, existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { platform } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { effect } from 'alien-signals'
 import { got } from 'got-cjs'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
-import * as lockfile from 'proper-lockfile'
 import { consola, once } from '../utils'
 import { genCaddyfile, validateTemplateContext } from './caddyfile'
 import { useCaddyConfig } from './config'
-import { caddyFilePath, caddyLockFilePath, caddyPath, supportList, TEMP_DIR } from './constants'
+import { caddyFilePath, caddyPath, supportList, TEMP_DIR } from './constants'
 import { isCaddyReloadCancellation } from './log'
 import { HelperCaddyProcess, openPrivilegedSession } from './privileged'
 import { formatTlsHealthFailure, waitForLocalTls } from './tls-health'
@@ -133,6 +131,8 @@ function splitHostPort(addr: string): { host: string, port: string } {
 /** Injection point for tests: opens the privileged helper without sudo. */
 export interface CaddyDependencies {
   openSession: (runtimeDir: string, reason?: { target: string, https: boolean }) => Promise<OpenedPrivilegedSession>
+  /** Shared route config; tests inject an in-memory one. */
+  config: () => ReturnType<typeof useCaddyConfig>
 }
 
 const defaultDependencies: CaddyDependencies = {
@@ -144,6 +144,7 @@ const defaultDependencies: CaddyDependencies = {
     caddyConfigPath: caddyFilePath,
     reason,
   }),
+  config: () => getCaddyConfig(),
 }
 
 export class CaddyInstant {
@@ -151,8 +152,6 @@ export class CaddyInstant {
   private stoped = false
   private readonly deps: CaddyDependencies
 
-  /** has locked when start */
-  private locked = false
   private caddyfile: string | undefined
 
   private _caddyChild: HelperCaddyProcess | undefined
@@ -161,21 +160,11 @@ export class CaddyInstant {
   private _source: string | undefined
   private _target: string | undefined
   private _stopEffects: Array<(() => void)> = []
+  /** Identifies this instance's routes in the shared config. */
+  private readonly proxyKey = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`
 
   constructor(deps: Partial<CaddyDependencies> = {}) {
     this.deps = { ...defaultDependencies, ...deps }
-    this.locked = this.checkLock()
-  }
-
-  checkLock(): boolean {
-    if (!existsSync(caddyLockFilePath))
-      writeFileSync(caddyLockFilePath, '')
-    try {
-      return lockfile.checkSync(caddyLockFilePath)
-    }
-    catch {
-      return false
-    }
   }
 
   /**
@@ -260,9 +249,15 @@ export class CaddyInstant {
       throw new Error(formatTlsHealthFailure(targetHost, health))
   }
 
+  /**
+   * Regenerates the Caddyfile from the config on disk.
+   *
+   * Reading the file rather than a cached view matters here: another project
+   * may have added its route since this instance last looked.
+   */
   private async updateCaddyfile(): Promise<void> {
-    const { configJsonRef } = getCaddyConfig()
-    const proxies = Object.values(configJsonRef() || {})
+    const { readProxies } = this.deps.config()
+    const proxies = Object.values(readProxies())
     const ctx = validateTemplateContext({
       caddy_root: this.caddyRoot,
       proxies,
@@ -342,32 +337,17 @@ export class CaddyInstant {
       },
     ]
 
-    const { writeCaddyConfig } = getCaddyConfig()
-    writeCaddyConfig(proxies)
+    const { writeCaddyConfig } = this.deps.config()
+    await writeCaddyConfig(proxies, this.proxyKey)
 
     await this.updateCaddyfile()
 
-    let skipInitialCaddyfileEffect = true
-    this._stopEffects.push(
-      effect(() => {
-        getCaddyConfig().configJsonRef()
-        if (skipInitialCaddyfileEffect) {
-          skipInitialCaddyfileEffect = false
-          return
-        }
-        void this.updateCaddyfile()
-      }),
-    )
-
-    if (!existsSync(caddyLockFilePath))
-      writeFileSync(caddyLockFilePath, '')
-
-    if (!this.locked) {
-      // Ports 80/443 may still be held by a previous, uncleanly stopped run.
-      await session.client.call('port.free', { port: 443 })
-      if (process.platform === 'win32' || !https)
-        await session.client.call('port.free', { port: 80 })
-    }
+    // Ports 80/443 may still be held by a previous, uncleanly stopped run.
+    // The helper skips its own Caddy, so this never kills a proxy another
+    // project is already using.
+    await session.client.call('port.free', { port: 443 })
+    if (process.platform === 'win32' || !https)
+      await session.client.call('port.free', { port: 80 })
 
     return new Promise<void>((resolve, reject) => {
       let startupCheckStarted = false
@@ -388,8 +368,7 @@ export class CaddyInstant {
           resolve()
         }
         catch (error) {
-          if (!this.locked)
-            await this.baseCleanup(restore)
+          await this.baseCleanup(restore)
           reject(error)
         }
       }
@@ -434,84 +413,65 @@ export class CaddyInstant {
         }
       }
 
-      if (!this.locked) {
-        lockfile.lockSync(caddyLockFilePath)
-        setupCleanup()
+      setupCleanup()
 
-        void (async () => {
-          try {
-            const child = new HelperCaddyProcess(session.client)
-            this._caddyChild = child
+      void (async () => {
+        try {
+          const child = new HelperCaddyProcess(session.client)
+          this._caddyChild = child
 
-            await session.client.call('caddy.start')
+          await session.client.call('caddy.start')
 
-            child.on('exit', (code: number | null) => {
-              if (code !== null && code !== 0)
-                reject(new Error(`Caddy exited with code ${code}`))
-            })
+          child.on('exit', (code: number | null) => {
+            if (code !== null && code !== 0)
+              reject(new Error(`Caddy exited with code ${code}`))
+          })
 
-            child.stderr.on('data', async (data: Buffer) => {
-              const lines = data.toString().split('\n').map((line: string) => line.trim())
-              for (const line of lines) {
-                // caddy log
-                // eslint-disable-next-line no-console
-                showCaddyLog && line && console.info(line)
-                if (isCaddyReloadCancellation(line)) {
-                  consola.info('Caddy restarted before TLS issuance completed; retrying.\n')
-                  continue
-                }
-                try {
-                  if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
-                    if (line.includes('parsing caddyfile tokens')) {
-                      consola.error('Caddyfile syntax error, please contact the author:\n', `${this.caddyfile}\n\n${line}\n`)
-                      await this.baseCleanup()
-                      process.exit()
-                    }
-                    else {
-                      consola.error(`${line}\n`)
-                      return reject(line)
-                    }
+          child.stderr.on('data', async (data: Buffer) => {
+            const lines = data.toString().split('\n').map((line: string) => line.trim())
+            for (const line of lines) {
+              // caddy log
+              // eslint-disable-next-line no-console
+              showCaddyLog && line && console.info(line)
+              if (isCaddyReloadCancellation(line)) {
+                consola.info('Caddy restarted before TLS issuance completed; retrying.\n')
+                continue
+              }
+              try {
+                if (line.includes('Error:') || (line && JSON.parse(line).level === 'error')) {
+                  if (line.includes('parsing caddyfile tokens')) {
+                    consola.error('Caddyfile syntax error, please contact the author:\n', `${this.caddyfile}\n\n${line}\n`)
+                    await this.baseCleanup()
+                    process.exit()
+                  }
+                  else {
+                    consola.error(`${line}\n`)
+                    return reject(line)
                   }
                 }
-                catch {}
-
-                if (line.includes('config file changed'))
-                  consola.success('Detect added a new reverse proxy config, restarted.\n')
-
-                if (line.includes('caddy proxying') || line.includes('serving initial'))
-                  void resolveWhenReady()
               }
-            })
+              catch {}
 
-            child.stdout.on('data', (data: Buffer) => {
-              consola.info(data.toString())
-              void resolveWhenReady()
-            })
-          }
-          catch (error) {
-            // The hosts entry was written before Caddy started; a failed start
-            // must not leave it behind while the dev server keeps running.
-            if (!this.locked)
-              await this.baseCleanup(restore)
-            reject(error)
-          }
-        })()
-      }
-      else {
-        consola.info('Caddy is running in another process.')
+              if (line.includes('config file changed'))
+                consola.success('Detect added a new reverse proxy config, restarted.\n')
 
-        void (async () => {
-          try {
-            if (https)
-              await this.ensureTlsReady(targetHost)
-            setupCleanup()
-            resolve()
-          }
-          catch (error) {
-            reject(error)
-          }
-        })()
-      }
+              if (line.includes('caddy proxying') || line.includes('serving initial'))
+                void resolveWhenReady()
+            }
+          })
+
+          child.stdout.on('data', (data: Buffer) => {
+            consola.info(data.toString())
+            void resolveWhenReady()
+          })
+        }
+        catch (error) {
+          // The hosts entry was written before Caddy started; a failed start
+          // must not leave it behind while the dev server keeps running.
+          await this.baseCleanup(restore)
+          reject(error)
+        }
+      })()
     })
   }
 
@@ -541,15 +501,12 @@ export class CaddyInstant {
       }
     }
 
-    if (!this.locked && !this.stoped) {
-      await this.stopCaddy()
+    // Caddy and the shared Caddyfile belong to every project using this
+    // helper. Only this project's route is removed here; the helper stops
+    // Caddy when its last client disconnects.
+    if (!this.stoped) {
       try {
-        await lockfile.unlock(caddyLockFilePath).catch(() => {})
-        await unlink(caddyFilePath).catch(() => {})
-        await unlink(caddyLockFilePath).catch(() => {})
-        if (caddyConfig) {
-          await caddyConfig.cleanUp()
-        }
+        await this.deps.config().removeProxy(this.proxyKey)
       }
       catch (e) {
         consola.error(e)

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { CaddyInstant } from '../../src/caddy'
 import { caddyLockFilePath } from '../../src/caddy/constants'
 import { HelperCaddyProcess } from '../../src/caddy/privileged'
+import { createFakeConfig } from './fake-config'
 
 // Each test starts from an unlocked state: a leftover lock would make the
 // plugin believe another instance already owns Caddy.
@@ -87,7 +88,7 @@ async function startServing(fake: ReturnType<typeof createFakeSession>, run: Pro
 describe('caddy through the privileged helper', () => {
   it('asks the helper to add the host mapping and free ports 80/443', async () => {
     const fake = createFakeSession()
-    const caddy = new CaddyInstant({ openSession: async () => fake.session })
+    const caddy = new CaddyInstant({ openSession: async () => fake.session, config: () => createFakeConfig() })
 
     await startServing(fake, caddy.run('127.0.0.1:8080', 'test.abc.com'))
 
@@ -98,7 +99,7 @@ describe('caddy through the privileged helper', () => {
 
   it('starts Caddy through the helper without naming a binary', async () => {
     const fake = createFakeSession()
-    const caddy = new CaddyInstant({ openSession: async () => fake.session })
+    const caddy = new CaddyInstant({ openSession: async () => fake.session, config: () => createFakeConfig() })
 
     await startServing(fake, caddy.run('127.0.0.1:8080', 'test.abc.com'))
 
@@ -106,9 +107,9 @@ describe('caddy through the privileged helper', () => {
     expect(fake.calls).toContainEqual({ method: 'caddy.start' })
   })
 
-  it('removes the mapping again during cleanup', async () => {
+  it('removes its own mapping during cleanup', async () => {
     const fake = createFakeSession()
-    const caddy = new CaddyInstant({ openSession: async () => fake.session })
+    const caddy = new CaddyInstant({ openSession: async () => fake.session, config: () => createFakeConfig() })
 
     await startServing(fake, caddy.run('127.0.0.1:8080', 'test.abc.com'))
     await caddy.baseCleanup()
@@ -117,7 +118,18 @@ describe('caddy through the privileged helper', () => {
       method: 'hosts.remove',
       params: { ip: '127.0.0.1', host: 'test.abc.com' },
     })
-    expect(fake.calls.map(call => call.method)).toContain('caddy.stop')
+  })
+
+  it('leaves Caddy running for the projects that are still up', async () => {
+    const fake = createFakeSession()
+    const caddy = new CaddyInstant({ openSession: async () => fake.session, config: () => createFakeConfig() })
+
+    await startServing(fake, caddy.run('127.0.0.1:8080', 'test.abc.com'))
+    await caddy.baseCleanup()
+
+    // The helper stops Caddy when its last client disconnects; a single client
+    // exiting must not take the shared proxy down.
+    expect(fake.calls.map(call => call.method)).not.toContain('caddy.stop')
   })
 
   it('surfaces a helper failure before Caddy starts', async () => {
@@ -136,7 +148,7 @@ describe('caddy through the privileged helper', () => {
       },
     } as typeof fake.session
 
-    const caddy = new CaddyInstant({ openSession: async () => failing })
+    const caddy = new CaddyInstant({ openSession: async () => failing, config: () => createFakeConfig() })
 
     await expect(caddy.run('127.0.0.1:8080', 'test.abc.com')).rejects.toThrow('EACCES: permission denied')
   })
@@ -147,6 +159,7 @@ describe('caddy through the privileged helper', () => {
     let opened = 0
 
     const caddy = new CaddyInstant({
+      config: () => createFakeConfig(),
       openSession: async () => {
         opened++
         return opened === 1 ? first.session : second.session
@@ -161,6 +174,8 @@ describe('caddy through the privileged helper', () => {
     // The next run must not reuse the dead session; it opens a fresh one.
     const secondRun = caddy.run('127.0.0.1:8099', 'test2.abc.com')
     await waitForCall(second, 'hosts.add')
+    await waitForCall(second, 'caddy.start')
+    second.emit({ type: 'event', kind: 'caddy.stderr', data: '{"msg":"serving initial configuration"}' })
     await secondRun.catch(() => {})
 
     expect(opened).toBe(2)

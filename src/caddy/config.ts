@@ -1,72 +1,191 @@
 import type { ProxyType } from './caddyfile'
-import { existsSync, readFileSync, watch, writeFileSync } from 'node:fs'
-import { unlink } from 'node:fs/promises'
-import { computed, signal } from 'alien-signals'
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import process from 'node:process'
+import * as lockfile from 'proper-lockfile'
 import { caddyConfigPath } from './constants'
 
-export function useCaddyConfig(): {
-  configJsonRef: () => (Record<string, typeof ProxyType.infer> | undefined)
-  writeCaddyConfig: (proxies: Array<typeof ProxyType.infer>) => void
+/** One project's route, plus the pid that owns it. */
+type ProxyEntry = typeof ProxyType.infer & { ownerPid?: number }
+
+type ProxyMap = Record<string, ProxyEntry>
+
+/**
+ * A file lock held around every read-modify-write of the shared config.
+ *
+ * Several dev servers run as independent processes, so a read-then-write from
+ * two of them can interleave and drop an entry. Synchronous calls are only
+ * atomic within one event loop, which is why the lock has to be a real file
+ * lock rather than an in-process queue.
+ */
+interface ConfigLock {
+  acquire: () => Promise<() => void>
+}
+
+export interface CaddyConfigApi {
+  configJsonRef: () => ProxyMap | undefined
+  /** Adds or replaces this project's routes, keeping everyone else's. */
+  writeCaddyConfig: (proxies: Array<typeof ProxyType.infer>, key: string) => Promise<void>
+  /** Drops one project's routes; the file goes away when nothing is left. */
+  removeProxy: (key: string) => Promise<void>
+  /** Reads the routes currently on disk, for regenerating the Caddyfile. */
+  readProxies: () => ProxyMap
   cleanUp: () => Promise<void>
-} {
-  const configContentRef = signal('{}')
+}
 
-  const configJsonRef = computed(() => {
-    try {
-      return JSON.parse(configContentRef()) as Record<string, typeof ProxyType.infer>
-    }
-    catch {
-      return undefined
-    }
-  })
+/** Owner pids that have exited can never clean up after themselves. */
+function isAlive(pid: number | undefined): boolean {
+  if (pid === undefined)
+    return true
+  try {
+    process.kill(pid, 0)
+    return true
+  }
+  catch {
+    return false
+  }
+}
 
-  function setConfigContent(): void {
-    if (!existsSync(caddyConfigPath)) {
-      writeFileSync(caddyConfigPath, '{}')
-    }
-    try {
-      configContentRef(readFileSync(caddyConfigPath, 'utf-8'))
-    }
-    catch {
-      configContentRef('')
-    }
+/**
+ * Reads the shared config, dropping entries whose owner process is gone.
+ *
+ * A SIGKILLed dev server cannot remove its own route, so without this sweep its
+ * domain would keep resolving to a proxy with no upstream behind it.
+ */
+function readConfig(): ProxyMap {
+  if (!existsSync(caddyConfigPath))
+    return {}
+
+  let parsed: ProxyMap
+  try {
+    parsed = JSON.parse(readFileSync(caddyConfigPath, 'utf-8')) as ProxyMap
+  }
+  catch {
+    // A half-written file is not worth preserving: it has no usable routes.
+    return {}
   }
 
-  if (!existsSync(caddyConfigPath)) {
-    writeFileSync(caddyConfigPath, '{}')
+  const alive: ProxyMap = {}
+  for (const [key, entry] of Object.entries(parsed)) {
+    if (isAlive(entry?.ownerPid))
+      alive[key] = entry
   }
+  return alive
+}
 
-  const watchCaddyConfig = watch(caddyConfigPath, () => {
-    setConfigContent()
-  })
+/**
+ * Writes through a temporary file so a concurrent reader never sees a partial
+ * document. `rename` is atomic within a filesystem, which keeps the shared
+ * config readable at all times.
+ */
+function writeConfig(proxies: ProxyMap): void {
+  const content = JSON.stringify(proxies, null, 2)
+  const temp = `${caddyConfigPath}.${process.pid}.tmp`
+  writeFileSync(temp, content)
+  renameSync(temp, caddyConfigPath)
+}
 
-  function writeCaddyConfig(_proxies: Array<typeof ProxyType.infer>): void {
-    const proxies = configJsonRef() || {}
-
-    _proxies.forEach((p) => {
-      let base = p.base || '/'
-      if (!base.startsWith('/'))
-        base = `/${base}`
-      if (base !== '/' && !base.endsWith('/'))
-        base = `${base}/`
-      const index = `${p.target}${p.portSuffix}${base}`
-      proxies[index] = { ...p, base }
-    })
-
-    const content = JSON.stringify(proxies, null, 2)
-    configContentRef(content)
-    return writeFileSync(caddyConfigPath, content)
+/** Applies `mutate` under the file lock, re-reading the latest state first. */
+async function mutateConfig(
+  lock: ConfigLock,
+  mutate: (proxies: ProxyMap) => void,
+): Promise<ProxyMap> {
+  const release = await lock.acquire()
+  try {
+    const proxies = readConfig()
+    mutate(proxies)
+    writeConfig(proxies)
+    return proxies
   }
-
-  async function cleanUp(): Promise<void> {
-    await unlink(caddyConfigPath).catch(() => { })
-    configContentRef('{}')
-    watchCaddyConfig.close()
+  finally {
+    release()
   }
+}
+
+export interface CaddyConfigOptions {
+  /** Injected in tests so they do not need the real lock. */
+  lock?: ConfigLock
+}
+
+export function useCaddyConfig(options: CaddyConfigOptions = {}): CaddyConfigApi {
+  const lock = options.lock ?? createFileLock()
 
   return {
-    configJsonRef,
-    writeCaddyConfig,
-    cleanUp,
+    configJsonRef: () => (existsSync(caddyConfigPath) ? readConfig() : undefined),
+
+    async writeCaddyConfig(_proxies, key) {
+      await mutateConfig(lock, (proxies) => {
+        for (const p of _proxies)
+          proxies[routeKey(p, key)] = { ...p, base: normalizeBase(p.base), ownerPid: process.pid }
+      })
+    },
+
+    async removeProxy(key) {
+      const proxies = await mutateConfig(lock, (current) => {
+        for (const route of Object.keys(current)) {
+          if (route.endsWith(`#${key}`))
+            delete current[route]
+        }
+      })
+
+      if (Object.keys(proxies).length === 0)
+        removeConfigFile()
+    },
+
+    readProxies: () => readConfig(),
+
+    async cleanUp() {
+      removeConfigFile()
+    },
+  }
+}
+
+function removeConfigFile(): void {
+  try {
+    if (existsSync(caddyConfigPath))
+      unlinkSync(caddyConfigPath)
+  }
+  catch {}
+}
+
+function normalizeBase(base: string | undefined): string {
+  let out = base || '/'
+  if (!out.startsWith('/'))
+    out = `/${out}`
+  if (out !== '/' && !out.endsWith('/'))
+    out = `${out}/`
+  return out
+}
+
+/**
+ * Route key: the domain it answers on, plus the owning project.
+ *
+ * Two projects can legitimately serve the same domain on different bases, so
+ * the key has to carry the base as well as the owner.
+ */
+export function routeKey(proxy: typeof ProxyType.infer, ownerKey: string): string {
+  return `${proxy.target}${proxy.portSuffix}${normalizeBase(proxy.base)}#${ownerKey}`
+}
+
+/**
+ * Builds the on-disk lock.
+ *
+ * `proper-lockfile` retries because the winner may hold the lock for a moment;
+ * `realpath: false` keeps it working when the temp directory is a symlink.
+ */
+function createFileLock(): ConfigLock {
+  return {
+    async acquire() {
+      if (!existsSync(caddyConfigPath))
+        writeFileSync(caddyConfigPath, '{}')
+
+      const release = await lockfile.lock(caddyConfigPath, {
+        realpath: false,
+        stale: 10_000,
+        retries: { retries: 20, minTimeout: 10, maxTimeout: 100 },
+      })
+      return () => {
+        void release().catch(() => {})
+      }
+    },
   }
 }
