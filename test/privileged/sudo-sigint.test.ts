@@ -18,7 +18,7 @@ describe('sudo prompt and SIGINT', () => {
     const before = process.listenerCount('SIGINT')
 
     // A command that fails immediately stands in for a cancelled prompt.
-    const result = await authenticateSudo('false', { target: 'sigint.abc.com', https: true })
+    const result = await authenticateSudo('false', { target: 'sigint.abc.com', https: true, quiet: true })
 
     expect(result.ok).toBe(false)
     expect(result.denied).toBe(true)
@@ -29,7 +29,7 @@ describe('sudo prompt and SIGINT', () => {
   })
 
   it('reports a plain failure differently from a cancellation', async () => {
-    const result = await authenticateSudo('false', { target: 'sigint.abc.com', https: true })
+    const result = await authenticateSudo('false', { target: 'sigint.abc.com', https: true, quiet: true })
 
     // No signal was sent, so this is a failed password, not a cancellation.
     expect(result.message).toContain('administrator permission is required')
@@ -37,7 +37,7 @@ describe('sudo prompt and SIGINT', () => {
 
   it('returns ok without prompting when sudo needs no password', async () => {
     // `true` exits 0, which is what a cached credential looks like.
-    const result = await authenticateSudo('true', { target: 'sigint.abc.com', https: true })
+    const result = await authenticateSudo('true', { target: 'sigint.abc.com', https: true, quiet: true })
 
     expect(result.ok).toBe(true)
     expect(result.denied).toBeUndefined()
@@ -47,7 +47,7 @@ describe('sudo prompt and SIGINT', () => {
     const before = process.listenerCount('SIGINT')
 
     // A missing binary makes spawn emit `error` rather than `exit`.
-    await authenticateSudo('/nonexistent-sudo-binary', { target: 'sigint.abc.com', https: true })
+    await authenticateSudo('/nonexistent-sudo-binary', { target: 'sigint.abc.com', https: true, quiet: true })
 
     expect(process.listenerCount('SIGINT')).toBe(before)
   })

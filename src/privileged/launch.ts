@@ -72,7 +72,7 @@ export function describePasswordReason(target: string, https: boolean): string[]
  */
 export async function authenticateSudo(
   sudoCommand = 'sudo',
-  options: { target?: string, https?: boolean } = {},
+  options: { target?: string, https?: boolean, quiet?: boolean } = {},
 ): Promise<{ ok: boolean, denied?: boolean, message?: string }> {
   if (platform() === 'win32')
     return { ok: true }
@@ -80,7 +80,9 @@ export async function authenticateSudo(
   if (spawnSync(sudoCommand, ['-n', 'true'], { stdio: 'ignore' }).status === 0)
     return { ok: true }
 
-  if (options.target) {
+  // Tests drive this without a terminal; writing the notice there would print
+  // password instructions into the middle of the test output.
+  if (options.target && !options.quiet) {
     for (const line of describePasswordReason(options.target, options.https ?? false))
       process.stderr.write(`${line}\n`)
     process.stderr.write('\n')
@@ -123,14 +125,56 @@ export async function authenticateSudo(
  * Spawned asynchronously rather than with `spawnSync`: the synchronous form
  * blocks the event loop, so the SIGINT handler above never runs and the exit
  * looks like a plain failure instead of a cancellation.
+ *
+ * The terminal is put back into cooked mode first. Vite turns on raw mode for
+ * its `h + enter` shortcuts, and in that mode Enter no longer terminates the
+ * line sudo is reading, so the password appears to need a second Enter.
  */
 function runPrompt(sudoCommand: string): Promise<{ status: number | null, signal: NodeJS.Signals | null }> {
   return new Promise((resolve) => {
+    const restore = takeBackTerminal()
     const child = spawn(sudoCommand, ['-v'], { stdio: 'inherit' })
 
-    child.on('error', () => resolve({ status: 1, signal: null }))
-    child.on('exit', (status, signal) => resolve({ status, signal }))
+    const finish = (result: { status: number | null, signal: NodeJS.Signals | null }): void => {
+      restore()
+      resolve(result)
+    }
+
+    child.on('error', () => finish({ status: 1, signal: null }))
+    child.on('exit', (status, signal) => finish({ status, signal }))
   })
+}
+
+/**
+ * Returns the terminal to cooked mode for the duration of the prompt.
+ *
+ * Vite leaves stdin in raw mode while it listens for its own shortcuts. In raw
+ * mode the tty does no line editing, so the Enter that should submit the
+ * password only reaches sudo as a bare carriage return and the read does not
+ * complete. The returned function puts the previous state back, so Vite's
+ * shortcuts keep working afterwards.
+ */
+function takeBackTerminal(): () => void {
+  const stdin = process.stdin
+  if (!stdin.isTTY || typeof stdin.setRawMode !== 'function')
+    return () => {}
+
+  const wasRaw = stdin.isRaw === true
+  try {
+    stdin.setRawMode(false)
+  }
+  catch {
+    return () => {}
+  }
+
+  return () => {
+    if (!wasRaw)
+      return
+    try {
+      stdin.setRawMode(true)
+    }
+    catch {}
+  }
 }
 
 /** The user dismissed the password prompt; this is a choice, not a failure. */
