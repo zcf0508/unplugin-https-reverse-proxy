@@ -104,6 +104,8 @@ export interface HelperRuntime {
   dispose: () => Promise<void>
   /** Removes hosts entries a previous crashed session left behind. */
   sweepStaleEntries: () => Promise<boolean>
+  /** Number of attached dev servers; a signal must not tear down a live one. */
+  clientCount: () => number
 }
 
 /**
@@ -332,6 +334,7 @@ export function createHelperRuntime(deps: HelperDeps): HelperRuntime {
     },
     dispose,
     sweepStaleEntries,
+    clientCount: () => clients.size,
   }
 }
 
@@ -413,6 +416,19 @@ export function createNodeHelperDeps(options: NodeHelperDepsOptions): HelperDeps
   const log = options.log ?? ((message: string) => process.stdout.write(`${message}\n`))
   let caddy: CaddyChild | undefined
 
+  // Caddy runs in its own session, so it no longer dies with this process. The
+  // `exit` hook is the last chance to take it down; it must stay synchronous,
+  // which `kill` is. Nothing runs after SIGKILL, and that case is covered by
+  // the next start freeing the port.
+  process.on('exit', () => {
+    if (caddy?.pid === undefined)
+      return
+    try {
+      process.kill(caddy.pid, 'SIGTERM')
+    }
+    catch {}
+  })
+
   return {
     readHosts: () => readFileSync(hostsPath, 'utf8'),
     writeHosts: (content) => {
@@ -465,10 +481,18 @@ export function createNodeHelperDeps(options: NodeHelperDepsOptions): HelperDeps
     startCaddy: (emit) => {
       // `--watch` makes Caddy reload when another project rewrites the shared
       // Caddyfile. Without it the second project's route never takes effect.
+      //
+      // `detached` puts Caddy in its own session. It shares one Caddy between
+      // projects, so the Ctrl+C that stops one dev server must not reach it:
+      // the whole foreground process group gets SIGINT, and Caddy exits on
+      // SIGINT. `kill()` still targets the pid, and the exit event still fires.
+      // Windows has no process groups to escape and `detached` would open a
+      // console window there, so it stays off.
       const child = spawn(options.caddyBin, ['run', '--adapter', 'caddyfile', '--config', options.caddyConfigPath, '--watch'], {
         cwd: options.caddyCwd ?? process.cwd(),
         env: { ...process.env, ...options.caddyEnv },
         stdio: ['ignore', 'pipe', 'pipe'],
+        detached: platform() !== 'win32',
       })
       const handle: CaddyChild & { running?: boolean } = {
         pid: child.pid,
