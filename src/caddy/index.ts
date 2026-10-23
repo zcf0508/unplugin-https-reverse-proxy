@@ -106,11 +106,35 @@ interface RunOptions {
   healthCheck?: boolean
 }
 
+/** Where Caddy keeps the local CA; the template serves it for device installs. */
+function caddyRootPath(): string {
+  return join(
+    process.platform === 'win32'
+      ? `${process.env.AppData!}/Caddy`
+      : `${process.env.HOME!}/Library/Application Support/Caddy`,
+    './pki/authorities/local',
+  )
+}
+
+/**
+ * Renders the Caddyfile from the routes currently on disk and writes it.
+ *
+ * Called from inside the config lock, so two projects writing at once cannot
+ * render from their own stale view of the routes.
+ */
+async function renderCaddyfile(proxies: Record<string, unknown>): Promise<void> {
+  const ctx = validateTemplateContext({
+    caddy_root: caddyRootPath(),
+    proxies: Object.values(proxies) as never,
+  })
+  await writeFile(caddyFilePath, await genCaddyfile(ctx))
+}
+
 let caddyConfig: ReturnType<typeof useCaddyConfig> | undefined
 
 function getCaddyConfig(): ReturnType<typeof useCaddyConfig> {
   if (!caddyConfig) {
-    caddyConfig = useCaddyConfig()
+    caddyConfig = useCaddyConfig({ renderCaddyfile: renderCaddyfile as never })
   }
   return caddyConfig
 }
@@ -194,12 +218,7 @@ export class CaddyInstant {
   }
 
   get caddyRoot(): string {
-    return join(
-      process.platform === 'win32'
-        ? `${process.env.AppData!}/Caddy`
-        : `${process.env.HOME!}/Library/Application Support/Caddy`,
-      './pki/authorities/local',
-    )
+    return caddyRootPath()
   }
 
   async writeCaddyfile(): Promise<void> {

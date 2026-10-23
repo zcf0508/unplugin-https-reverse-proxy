@@ -84,43 +84,58 @@ function writeConfig(proxies: ProxyMap): void {
   renameSync(temp, caddyConfigPath)
 }
 
-/** Applies `mutate` under the file lock, re-reading the latest state first. */
-async function mutateConfig(
-  lock: ConfigLock,
-  mutate: (proxies: ProxyMap) => void,
-): Promise<ProxyMap> {
-  const release = await lock.acquire()
-  try {
-    const proxies = readConfig()
-    mutate(proxies)
-    writeConfig(proxies)
-    return proxies
-  }
-  finally {
-    release()
-  }
-}
-
 export interface CaddyConfigOptions {
   /** Injected in tests so they do not need the real lock. */
   lock?: ConfigLock
+  /**
+   * Renders the Caddyfile from the routes, called inside the config lock.
+   *
+   * Rendering here rather than in the caller is what keeps the file in step
+   * with the JSON: two projects writing concurrently would otherwise render
+   * from their own stale view and the later write would win.
+   */
+  renderCaddyfile?: (proxies: ProxyMap) => Promise<void>
 }
 
 export function useCaddyConfig(options: CaddyConfigOptions = {}): CaddyConfigApi {
   const lock = options.lock ?? createFileLock()
 
+  /**
+   * Applies the change, then re-renders while still holding the lock.
+   *
+   * The Caddyfile has to follow every change: leaving a stopped project's site
+   * in it would keep proxying to an upstream that is gone. Doing it inside the
+   * lock also picks up routes whose owner process died, since `readConfig`
+   * drops those.
+   */
+  async function mutate(
+    apply: (proxies: ProxyMap) => void,
+  ): Promise<ProxyMap> {
+    const release = await lock.acquire()
+    try {
+      const proxies = readConfig()
+      apply(proxies)
+      writeConfig(proxies)
+      await options.renderCaddyfile?.(proxies)
+      return proxies
+    }
+    finally {
+      release()
+    }
+  }
+
   return {
     configJsonRef: () => (existsSync(caddyConfigPath) ? readConfig() : undefined),
 
     async writeCaddyConfig(_proxies, key) {
-      await mutateConfig(lock, (proxies) => {
+      await mutate((proxies) => {
         for (const p of _proxies)
           proxies[routeKey(p, key)] = { ...p, base: normalizeBase(p.base), ownerPid: process.pid }
       })
     },
 
     async removeProxy(key) {
-      const proxies = await mutateConfig(lock, (current) => {
+      const proxies = await mutate((current) => {
         for (const route of Object.keys(current)) {
           if (route.endsWith(`#${key}`))
             delete current[route]
