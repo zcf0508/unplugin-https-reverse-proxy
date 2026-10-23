@@ -2,7 +2,7 @@ import type { Buffer } from 'node:buffer'
 import type { OpenedPrivilegedSession } from './privileged'
 import { execFile } from 'node:child_process'
 import { chmodSync, createWriteStream, existsSync, mkdirSync, unlinkSync } from 'node:fs'
-import { readFile, unlink, writeFile } from 'node:fs/promises'
+import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { platform } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -12,7 +12,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent'
 import { consola, once } from '../utils'
 import { genCaddyfile, validateTemplateContext } from './caddyfile'
 import { useCaddyConfig } from './config'
-import { caddyFilePath, caddyPath, supportList, TEMP_DIR } from './constants'
+import { caddyAdminSocketPath, caddyFilePath, caddyPath, supportList, TEMP_DIR } from './constants'
 import { isCaddyReloadCancellation } from './log'
 import { HelperCaddyProcess, openPrivilegedSession } from './privileged'
 import { formatTlsHealthFailure, waitForLocalTls } from './tls-health'
@@ -125,9 +125,18 @@ function caddyRootPath(): string {
 async function renderCaddyfile(proxies: Record<string, unknown>): Promise<void> {
   const ctx = validateTemplateContext({
     caddy_root: caddyRootPath(),
+    admin_socket: caddyAdminSocketPath,
     proxies: Object.values(proxies) as never,
   })
-  await writeFile(caddyFilePath, await genCaddyfile(ctx))
+  const content = await genCaddyfile(ctx)
+
+  // Written through a temporary file: Caddy watches this path, and a reload
+  // triggered by a half-written file fails to parse. The starter's stderr
+  // handler exits the dev server on a parse error, so a partial read would take
+  // down an unrelated project.
+  const temp = `${caddyFilePath}.${process.pid}.tmp`
+  await writeFile(temp, content)
+  await rename(temp, caddyFilePath)
 }
 
 let caddyConfig: ReturnType<typeof useCaddyConfig> | undefined
@@ -166,6 +175,7 @@ const defaultDependencies: CaddyDependencies = {
     // helper must never execute something named in a request.
     caddyBin: caddyPath,
     caddyConfigPath: caddyFilePath,
+    caddyAdminSocket: caddyAdminSocketPath,
     reason,
   }),
   config: () => getCaddyConfig(),
@@ -269,43 +279,6 @@ export class CaddyInstant {
   }
 
   /**
-   * Regenerates the Caddyfile from the config on disk.
-   *
-   * Reading the file rather than a cached view matters here: another project
-   * may have added its route since this instance last looked.
-   */
-  private async updateCaddyfile(): Promise<void> {
-    const { readProxies } = this.deps.config()
-    const proxies = Object.values(readProxies())
-    const ctx = validateTemplateContext({
-      caddy_root: this.caddyRoot,
-      proxies,
-    })
-
-    this.caddyfile = await genCaddyfile(ctx)
-    await this.writeCaddyfile()
-  }
-
-  private async stopCaddy(): Promise<void> {
-    try {
-      await got.post('http://127.0.0.1:2019/stop', {
-        headers: {
-          Origin: 'http://localhost:2019',
-        },
-        retry: {
-          limit: 0,
-        },
-        timeout: {
-          request: 2000,
-        },
-      })
-    }
-    catch {}
-
-    this._caddyChild?.kill()
-  }
-
-  /**
    * @param source like `127.0.0.1:8080`
    * @param target like `test.abc.com`. And if you provide a port ,it will be ignore.
    */
@@ -356,10 +329,11 @@ export class CaddyInstant {
       },
     ]
 
+    // This also renders the Caddyfile, inside the same lock: rendering here
+    // afterwards would read the routes outside the lock and could overwrite a
+    // newer Caddyfile written by another project in between.
     const { writeCaddyConfig } = this.deps.config()
     await writeCaddyConfig(proxies, this.proxyKey)
-
-    await this.updateCaddyfile()
 
     // Ports 80/443 may still be held by a previous, uncleanly stopped run.
     // The helper skips its own Caddy, so this never kills a proxy another

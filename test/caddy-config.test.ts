@@ -1,12 +1,25 @@
+import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useCaddyConfig } from '../src/caddy/config'
 
-const OWNER = 'test-owner'
+/**
+ * The config path is a module constant, so every test file in this run shares
+ * one file. Clearing it wholesale would race the other config tests; each case
+ * scopes its routes to a unique owner and removes only those.
+ */
+const owners: string[] = []
+
+function ownOwner(): string {
+  const owner = `owner-${randomUUID()}`
+  owners.push(owner)
+  return owner
+}
 
 describe('caddy config write with base path', () => {
   afterEach(async () => {
-    const { cleanUp } = useCaddyConfig()
-    await cleanUp()
+    const { removeProxy } = useCaddyConfig()
+    for (const owner of owners.splice(0))
+      await removeProxy(owner)
   })
 
   it('keeps both bases when one host serves two projects', async () => {
@@ -29,7 +42,7 @@ describe('caddy config write with base path', () => {
         base: '/api',
         healthCheck: true,
       },
-    ], OWNER)
+    ], ownOwner())
 
     const cfg = configJsonRef()
     expect(cfg).toBeTruthy()
@@ -54,7 +67,7 @@ describe('caddy config write with base path', () => {
         base: '/',
         healthCheck: true,
       },
-    ], 'project-a')
+    ], ownOwner())
 
     await writeCaddyConfig([
       {
@@ -65,7 +78,7 @@ describe('caddy config write with base path', () => {
         base: '/',
         healthCheck: true,
       },
-    ], 'project-b')
+    ], ownOwner())
 
     const targets = Object.values(readProxies()).map(entry => entry.target)
     expect(targets).toEqual(expect.arrayContaining(['a.example.com', 'b.example.com']))
@@ -73,6 +86,7 @@ describe('caddy config write with base path', () => {
 
   it('removes only the routes of the project that exits', async () => {
     const { writeCaddyConfig, removeProxy, readProxies } = useCaddyConfig()
+    const exiting = ownOwner()
 
     await writeCaddyConfig([
       {
@@ -83,7 +97,7 @@ describe('caddy config write with base path', () => {
         base: '/',
         healthCheck: true,
       },
-    ], 'project-a')
+    ], exiting)
 
     await writeCaddyConfig([
       {
@@ -94,11 +108,12 @@ describe('caddy config write with base path', () => {
         base: '/',
         healthCheck: true,
       },
-    ], 'project-b')
+    ], ownOwner())
 
-    await removeProxy('project-a')
+    await removeProxy(exiting)
 
     const targets = Object.values(readProxies()).map(entry => entry.target)
-    expect(targets).toEqual(['b.example.com'])
+    expect(targets).toContain('b.example.com')
+    expect(targets.filter(t => t === 'a.example.com')).toHaveLength(0)
   })
 })

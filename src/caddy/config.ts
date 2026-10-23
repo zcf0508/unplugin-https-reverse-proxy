@@ -51,13 +51,13 @@ function isAlive(pid: number | undefined): boolean {
  * A SIGKILLed dev server cannot remove its own route, so without this sweep its
  * domain would keep resolving to a proxy with no upstream behind it.
  */
-function readConfig(): ProxyMap {
-  if (!existsSync(caddyConfigPath))
+function readConfig(path: string = caddyConfigPath): ProxyMap {
+  if (!existsSync(path))
     return {}
 
   let parsed: ProxyMap
   try {
-    parsed = JSON.parse(readFileSync(caddyConfigPath, 'utf-8')) as ProxyMap
+    parsed = JSON.parse(readFileSync(path, 'utf-8')) as ProxyMap
   }
   catch {
     // A half-written file is not worth preserving: it has no usable routes.
@@ -77,16 +77,23 @@ function readConfig(): ProxyMap {
  * document. `rename` is atomic within a filesystem, which keeps the shared
  * config readable at all times.
  */
-function writeConfig(proxies: ProxyMap): void {
+function writeConfig(proxies: ProxyMap, path: string = caddyConfigPath): void {
   const content = JSON.stringify(proxies, null, 2)
-  const temp = `${caddyConfigPath}.${process.pid}.tmp`
+  const temp = `${path}.${process.pid}.tmp`
   writeFileSync(temp, content)
-  renameSync(temp, caddyConfigPath)
+  renameSync(temp, path)
 }
 
 export interface CaddyConfigOptions {
   /** Injected in tests so they do not need the real lock. */
   lock?: ConfigLock
+  /**
+   * Config file to operate on; defaults to the shared runtime path.
+   *
+   * Injectable so a test can own a file without racing every other test that
+   * happens to run against the same module-level constant.
+   */
+  configPath?: string
   /**
    * Renders the Caddyfile from the routes, called inside the config lock.
    *
@@ -99,6 +106,7 @@ export interface CaddyConfigOptions {
 
 export function useCaddyConfig(options: CaddyConfigOptions = {}): CaddyConfigApi {
   const lock = options.lock ?? createFileLock()
+  const configPath = options.configPath ?? caddyConfigPath
 
   /**
    * Applies the change, then re-renders while still holding the lock.
@@ -113,9 +121,9 @@ export function useCaddyConfig(options: CaddyConfigOptions = {}): CaddyConfigApi
   ): Promise<ProxyMap> {
     const release = await lock.acquire()
     try {
-      const proxies = readConfig()
+      const proxies = readConfig(configPath)
       apply(proxies)
-      writeConfig(proxies)
+      writeConfig(proxies, configPath)
       await options.renderCaddyfile?.(proxies)
       return proxies
     }
@@ -125,7 +133,7 @@ export function useCaddyConfig(options: CaddyConfigOptions = {}): CaddyConfigApi
   }
 
   return {
-    configJsonRef: () => (existsSync(caddyConfigPath) ? readConfig() : undefined),
+    configJsonRef: () => (existsSync(configPath) ? readConfig(configPath) : undefined),
 
     async writeCaddyConfig(_proxies, key) {
       await mutate((proxies) => {
@@ -135,29 +143,29 @@ export function useCaddyConfig(options: CaddyConfigOptions = {}): CaddyConfigApi
     },
 
     async removeProxy(key) {
-      const proxies = await mutate((current) => {
+      // The empty config is written inside the lock rather than unlinked after
+      // it: between the release and the unlink another project can add its
+      // route, and the unlink would then drop a route that is in use.
+      await mutate((current) => {
         for (const route of Object.keys(current)) {
           if (route.endsWith(`#${key}`))
             delete current[route]
         }
       })
-
-      if (Object.keys(proxies).length === 0)
-        removeConfigFile()
     },
 
-    readProxies: () => readConfig(),
+    readProxies: () => readConfig(configPath),
 
     async cleanUp() {
-      removeConfigFile()
+      removeConfigFile(configPath)
     },
   }
 }
 
-function removeConfigFile(): void {
+function removeConfigFile(path: string = caddyConfigPath): void {
   try {
-    if (existsSync(caddyConfigPath))
-      unlinkSync(caddyConfigPath)
+    if (existsSync(path))
+      unlinkSync(path)
   }
   catch {}
 }
