@@ -46,6 +46,8 @@ const FLUSH_FALLBACK = [{ file: 'killall', args: ['-HUP', 'mDNSResponder'] }] as
 export interface CaddyChild {
   pid?: number
   kill: (signal?: NodeJS.Signals) => boolean
+  /** False once the process has exited; undefined when unknown. */
+  running?: boolean
 }
 
 /**
@@ -60,7 +62,8 @@ export interface HelperDeps {
   readHosts: () => string
   writeHosts: (content: string) => void
   flushDns: () => Promise<void>
-  freePort: (port: number) => Promise<number[]>
+  /** Releases a port; never kills the pid in `keepPid`. */
+  freePort: (port: number, keepPid?: number) => Promise<number[]>
   /** Caddy binary and the Caddyfile it must load, both fixed at start-up. */
   caddyBin: string
   caddyConfigPath: string
@@ -91,7 +94,8 @@ async function flushDnsBestEffort(deps: HelperDeps): Promise<void> {
 }
 
 export interface HelperRuntime {
-  handle: (request: HelperRequest) => Promise<HelperResponse>
+  /** `client` identifies the caller so shared host mappings are reference-counted. */
+  handle: (request: HelperRequest, client?: object) => Promise<HelperResponse>
   /** Registers a connected client so Caddy output reaches it. */
   attach: (client: object) => void
   /** Last client gone: stop Caddy and drop the hosts entries this plugin wrote. */
@@ -113,6 +117,37 @@ export function createHelperRuntime(deps: HelperDeps): HelperRuntime {
   // belongs to a previous generation and must not touch the new session.
   let generation = 0
   let caddy: CaddyChild | undefined
+
+  // Which client asked for which host. Two projects may map the same domain, so
+  // a mapping is only removed once its last holder is gone.
+  const hostOwners = new Map<string, Set<object>>()
+
+  const hostId = (ip: string, host: string): string => `${ip} ${host.toLowerCase()}`
+
+  function addHostOwner(client: object | undefined, ip: string, host: string): void {
+    const id = hostId(ip, host)
+    let owners = hostOwners.get(id)
+    if (!owners) {
+      owners = new Set()
+      hostOwners.set(id, owners)
+    }
+    owners.add(client ?? deps)
+  }
+
+  /** True when no other client still needs this mapping. */
+  function releaseHostOwner(client: object | undefined, ip: string, host: string): boolean {
+    const id = hostId(ip, host)
+    const owners = hostOwners.get(id)
+    if (!owners)
+      return true
+
+    owners.delete(client ?? deps)
+    if (owners.size > 0)
+      return false
+
+    hostOwners.delete(id)
+    return true
+  }
 
   const broadcast = (event: HelperEvent): void => {
     const line = serializeMessage(event)
@@ -183,7 +218,7 @@ export function createHelperRuntime(deps: HelperDeps): HelperRuntime {
     }
   }
 
-  async function handle(request: HelperRequest): Promise<HelperResponse> {
+  async function handle(request: HelperRequest, client?: object): Promise<HelperResponse> {
     try {
       switch (request.method) {
         case 'ping':
@@ -197,6 +232,7 @@ export function createHelperRuntime(deps: HelperDeps): HelperRuntime {
           const edited = addHost(deps.readHosts(), ip, host)
           if (edited.changed)
             deps.writeHosts(edited.content)
+          addHostOwner(client, ip, host)
           await flushDnsBestEffort(deps)
           return { id: request.id, ok: true }
         }
@@ -205,6 +241,12 @@ export function createHelperRuntime(deps: HelperDeps): HelperRuntime {
           const { ip, host } = request.params
           if (!isSafeIp(ip) || !isSafeHost(host))
             return { id: request.id, ok: false, error: { message: 'invalid hosts entry' } }
+
+          // Another project may still need this domain; only the last holder
+          // removes the mapping.
+          const last = releaseHostOwner(client, ip, host)
+          if (!last)
+            return { id: request.id, ok: true, result: { kept: true } }
 
           const edited = removeHost(deps.readHosts(), ip, host)
           if (edited.changed)
@@ -218,16 +260,20 @@ export function createHelperRuntime(deps: HelperDeps): HelperRuntime {
           if (!isAllowedFreePort(port))
             return { id: request.id, ok: false, error: { message: `port ${port} is not releasable` } }
 
-          const killed = await deps.freePort(port)
+          // Caddy belongs to this helper, so a port sweep must never kill it:
+          // the pid is the one serving every other project's domains.
+          const killed = await deps.freePort(port, caddy?.pid)
           return { id: request.id, ok: true, result: { killed } }
         }
 
         case 'caddy.start': {
-          if (caddy)
-            await stopCaddy()
+          // Idempotent: several dev servers share one Caddy, so a second start
+          // must attach to the running process instead of restarting it.
+          if (caddy && caddy.running !== false)
+            return { id: request.id, ok: true, result: { pid: caddy.pid, started: false } }
 
           caddy = deps.startCaddy(broadcast)
-          return { id: request.id, ok: true, result: { pid: caddy.pid } }
+          return { id: request.id, ok: true, result: { pid: caddy.pid, started: true } }
         }
 
         case 'caddy.stop': {
@@ -260,6 +306,27 @@ export function createHelperRuntime(deps: HelperDeps): HelperRuntime {
     },
     async detach(client) {
       clients.delete(client)
+
+      // Drop only the mappings this client was the last holder of, so a project
+      // that exits leaves the domains another project still serves alone.
+      for (const [id, owners] of [...hostOwners]) {
+        if (!owners.delete(client) || owners.size > 0)
+          continue
+
+        hostOwners.delete(id)
+        const [ip, host] = id.split(' ')
+        try {
+          const edited = removeHost(deps.readHosts(), ip, host)
+          if (edited.changed) {
+            deps.writeHosts(edited.content)
+            await flushDnsBestEffort(deps)
+          }
+        }
+        catch (error) {
+          deps.log(`hosts cleanup failed: ${(error as Error).message}`)
+        }
+      }
+
       if (clients.size === 0)
         await dispose()
     },
@@ -367,7 +434,7 @@ export function createNodeHelperDeps(options: NodeHelperDepsOptions): HelperDeps
 
       throw lastError ?? new Error('no DNS cache flush command for this platform')
     },
-    freePort: async (port) => {
+    freePort: async (port, keepPid) => {
       // `lsof` exits with 1 when nothing matches, which is the normal case for
       // a free port; only its stdout carries the answer.
       const pids = platform() === 'win32'
@@ -376,7 +443,9 @@ export function createNodeHelperDeps(options: NodeHelperDepsOptions): HelperDeps
 
       const killed: number[] = []
       for (const pid of pids) {
-        if (pid === process.pid)
+        // Never kill the helper itself or the Caddy it owns: that Caddy serves
+        // every project sharing this helper, not just the caller's.
+        if (pid === process.pid || (keepPid !== undefined && pid === keepPid))
           continue
         try {
           process.kill(pid, 'SIGTERM')
@@ -394,16 +463,28 @@ export function createNodeHelperDeps(options: NodeHelperDepsOptions): HelperDeps
     caddyStoragePath: options.caddyStoragePath,
     storageOwner: options.storageOwner,
     startCaddy: (emit) => {
-      const child = spawn(options.caddyBin, ['run', '--adapter', 'caddyfile', '--config', options.caddyConfigPath], {
+      // `--watch` makes Caddy reload when another project rewrites the shared
+      // Caddyfile. Without it the second project's route never takes effect.
+      const child = spawn(options.caddyBin, ['run', '--adapter', 'caddyfile', '--config', options.caddyConfigPath, '--watch'], {
         cwd: options.caddyCwd ?? process.cwd(),
         env: { ...process.env, ...options.caddyEnv },
         stdio: ['ignore', 'pipe', 'pipe'],
       })
+      const handle: CaddyChild & { running?: boolean } = {
+        pid: child.pid,
+        kill: signal => child.kill(signal),
+        running: true,
+      }
       child.stdout?.on('data', (data: Buffer) => emit({ type: 'event', kind: 'caddy.stdout', data: data.toString() }))
       child.stderr?.on('data', (data: Buffer) => emit({ type: 'event', kind: 'caddy.stderr', data: data.toString() }))
-      child.on('exit', (code, signal) => emit({ type: 'event', kind: 'caddy.exit', code, signal }))
-      caddy = child as unknown as CaddyChild
-      return caddy
+      child.on('exit', (code, signal) => {
+        // Recorded before broadcasting so a later `caddy.start` knows it has to
+        // spawn again rather than reuse a dead process.
+        handle.running = false
+        emit({ type: 'event', kind: 'caddy.exit', code, signal })
+      })
+      caddy = handle
+      return handle
     },
     stopCaddy: async () => {
       const current = caddy
@@ -448,7 +529,7 @@ export function attachSocket(socket: Socket, runtime: HelperRuntime, log: (messa
         continue
       }
 
-      void runtime.handle(request).then((response) => {
+      void runtime.handle(request, socket).then((response) => {
         if (!socket.destroyed)
           socket.write(serializeMessage(response))
       })
