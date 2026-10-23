@@ -420,12 +420,21 @@ export class CaddyInstant {
           const child = new HelperCaddyProcess(session.client)
           this._caddyChild = child
 
-          await session.client.call('caddy.start')
+          const started = await session.client.call('caddy.start')
 
           child.on('exit', (code: number | null) => {
             if (code !== null && code !== 0)
               reject(new Error(`Caddy exited with code ${code}`))
           })
+
+          // Caddy was already serving: its "serving initial" line was emitted
+          // when the first project started it, so waiting for it again would
+          // hang this instance forever.
+          if (started?.started === false) {
+            consola.info('Caddy is already running; added this route to it.')
+            void resolveWhenReady()
+            return
+          }
 
           child.stderr.on('data', async (data: Buffer) => {
             const lines = data.toString().split('\n').map((line: string) => line.trim())

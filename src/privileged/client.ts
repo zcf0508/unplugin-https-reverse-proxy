@@ -44,7 +44,8 @@ export interface HelperResults {
   'hosts.add': void
   'hosts.remove': void
   'port.free': { killed: number[] }
-  'caddy.start': { pid?: number }
+  /** `started: false` means Caddy was already running and was reused. */
+  'caddy.start': { pid?: number, started?: boolean }
   'caddy.stop': void
   'ca.trust': { trusted: boolean, output: string }
 }
