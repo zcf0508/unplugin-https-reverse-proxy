@@ -86,17 +86,25 @@ async function main(): Promise<void> {
     },
   })
 
-  // Ctrl+C is delivered to the whole foreground process group. The plugin also
-  // receives it and will drop the socket, which is the signal this helper acts
-  // on; exiting here would race that cleanup.
-  process.on('SIGINT', () => {})
+  // Terminal signals reach the whole foreground process group, so they also hit
+  // this helper when one of several dev servers stops. Acting on them would tear
+  // down the shared Caddy and hosts entries the remaining projects still use.
+  // The socket closing is the only signal this helper acts on.
+  //
+  // Ctrl+C, Ctrl+\, Ctrl+Z and a terminal closing all arrive this way: SIGINT,
+  // SIGQUIT, SIGTSTP and SIGHUP. Ignoring SIGTSTP also keeps the helper from
+  // being suspended, which would stall every attached project's RPC.
+  for (const signal of ['SIGINT', 'SIGQUIT', 'SIGTSTP', 'SIGHUP'] as const)
+    process.on(signal, () => {})
 
-  const shutdown = (): void => {
+  // SIGTERM is different: IDE and process-tree runners send it to shut the tool
+  // down for real. It still must not drop a live session, so it only tears down
+  // when no dev server is attached.
+  process.on('SIGTERM', () => {
+    if (helper.runtime.clientCount() > 0)
+      return
     void helper.runtime.dispose().finally(() => process.exit(0))
-  }
-
-  process.on('SIGTERM', shutdown)
-  process.on('SIGHUP', shutdown)
+  })
 
   // A closed stdout (the parent died) must not interrupt the cleanup path.
   process.stdout.on('error', () => {})
