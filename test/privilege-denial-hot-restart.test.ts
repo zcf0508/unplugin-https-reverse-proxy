@@ -14,7 +14,7 @@ describe('declined permission blocks every entry point', () => {
 
     // `-n` is tried first; when it fails the interactive prompt runs. Point both
     // at a command that always fails so no real sudo is involved.
-    const first = authenticateSudo('false')
+    const first = await authenticateSudo('false')
     expect(first.ok).toBe(false)
     expect(first.denied).toBe(true)
 

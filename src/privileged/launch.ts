@@ -70,10 +70,10 @@ export function describePasswordReason(target: string, https: boolean): string[]
  * Returns `denied` when the user dismissed the prompt, so the caller can keep
  * the dev server running instead of treating it as a crash.
  */
-export function authenticateSudo(
+export async function authenticateSudo(
   sudoCommand = 'sudo',
   options: { target?: string, https?: boolean } = {},
-): { ok: boolean, denied?: boolean, message?: string } {
+): Promise<{ ok: boolean, denied?: boolean, message?: string }> {
   if (platform() === 'win32')
     return { ok: true }
 
@@ -86,14 +86,51 @@ export function authenticateSudo(
     process.stderr.write('\n')
   }
 
-  if (spawnSync(sudoCommand, ['-v'], { stdio: 'inherit' }).status === 0)
-    return { ok: true }
-
-  return {
-    ok: false,
-    denied: true,
-    message: 'administrator permission is required to edit the hosts file and bind ports 80/443',
+  // `sudo -v` inherits the terminal, so Ctrl+C reaches this process too. Without
+  // a handler the default action kills the dev server, which reads as "the
+  // proxy crashed my dev server" when the user only meant to skip it.
+  let interrupted = false
+  const onSigint = (): void => {
+    interrupted = true
   }
+  process.on('SIGINT', onSigint)
+
+  try {
+    const { status, signal } = await runPrompt(sudoCommand)
+    if (status === 0)
+      return { ok: true }
+
+    // `sudo` exits 1 on a wrong password and dies by the signal on Ctrl+C.
+    // Both are checked: a real Ctrl+C reaches this process and the child
+    // together, while a signal aimed at the child alone only shows up here.
+    const cancelled = interrupted || signal === 'SIGINT'
+    return {
+      ok: false,
+      denied: true,
+      message: cancelled
+        ? 'administrator permission was cancelled'
+        : 'administrator permission is required to edit the hosts file and bind ports 80/443',
+    }
+  }
+  finally {
+    process.off('SIGINT', onSigint)
+  }
+}
+
+/**
+ * Runs `sudo -v` with the terminal attached.
+ *
+ * Spawned asynchronously rather than with `spawnSync`: the synchronous form
+ * blocks the event loop, so the SIGINT handler above never runs and the exit
+ * looks like a plain failure instead of a cancellation.
+ */
+function runPrompt(sudoCommand: string): Promise<{ status: number | null, signal: NodeJS.Signals | null }> {
+  return new Promise((resolve) => {
+    const child = spawn(sudoCommand, ['-v'], { stdio: 'inherit' })
+
+    child.on('error', () => resolve({ status: 1, signal: null }))
+    child.on('exit', (status, signal) => resolve({ status, signal }))
+  })
 }
 
 /** The user dismissed the password prompt; this is a choice, not a failure. */
@@ -132,7 +169,7 @@ export async function startPrivilegedHelper(options: LaunchOptions): Promise<Pri
   } = options
 
   if (!skipAuth && !direct) {
-    const auth = authenticateSudo(sudoCommand, options.reason)
+    const auth = await authenticateSudo(sudoCommand, options.reason)
     if (!auth.ok) {
       const message = auth.message ?? 'administrator permission is required'
       throw auth.denied ? new PrivilegeDeniedError(message) : new Error(message)
