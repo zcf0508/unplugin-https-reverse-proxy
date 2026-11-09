@@ -212,8 +212,10 @@ export class CaddyInstant {
     if (this._session && !this._session.client.connected)
       this._session = undefined
 
-    if (!this._session)
+    if (!this._session) {
+      await this.deps.config().writeCaddyConfig([], this.proxyKey)
       this._session = await this.deps.openSession(TEMP_DIR, reason)
+    }
     return this._session
   }
 
