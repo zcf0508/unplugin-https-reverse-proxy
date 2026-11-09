@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { checkPrivilegedPath } from '../../src/privileged/path-guard'
+import { checkPrivilegedPath, describeRejection } from '../../src/privileged/path-guard'
 
 /**
  * The helper executes the Caddy binary and loads the Caddyfile as root, while
@@ -36,6 +36,7 @@ describe('checkPrivilegedPath', () => {
     const rejection = checkPrivilegedPath(file, { label: 'Caddy binary', ownerUid: process.getuid?.() })
 
     expect(rejection?.reason).toContain('group- or world-writable')
+    expect(describeRejection(rejection!)).toContain('Remove group and world write access manually')
   })
 
   it('rejects a world-writable file', () => {
@@ -58,12 +59,14 @@ describe('checkPrivilegedPath', () => {
     // A link can be repointed after the check, so the checked file might not be
     // the one that ends up running.
     expect(rejection?.reason).toContain('symbolic link')
+    expect(describeRejection(rejection!)).toContain('Replace this symlink with a regular file manually')
   })
 
   it('rejects a missing path', () => {
     const rejection = checkPrivilegedPath(join(dir, 'absent'), { label: 'Caddyfile', ownerUid: process.getuid?.() })
 
     expect(rejection?.reason).toContain('not readable')
+    expect(describeRejection(rejection!)).toContain('Check that this path exists and that you can access its parent directories')
   })
 
   it('rejects a file owned by someone else', () => {
