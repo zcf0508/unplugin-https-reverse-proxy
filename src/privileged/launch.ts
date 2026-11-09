@@ -279,22 +279,34 @@ export async function startPrivilegedHelper(options: LaunchOptions): Promise<Pri
     })
 
     child.stdout?.on('data', (data: Buffer) => log?.(data.toString().trimEnd()))
-    child.stderr?.on('data', (data: Buffer) => log?.(data.toString().trimEnd()))
+    let stderr = ''
+    child.stderr?.on('data', (data: Buffer) => {
+      stderr = (stderr + data.toString()).slice(-4096)
+      log?.(data.toString().trimEnd())
+    })
 
-    const exited = new Promise<number | null>(resolve => child!.once('exit', code => resolve(code)))
+    const exited = new Promise<number | null>((resolve) => {
+      child!.once('error', (error) => {
+        stderr = error.message
+      })
+      child!.once('close', code => resolve(code))
+    })
 
-    // Refused credentials make the helper exit immediately; report that instead
-    // of waiting for the full connection timeout.
+    // A failed helper should report its own diagnostic (or sudo's) before the
+    // connection timeout. A nonzero exit does not imply denied permission.
     const earlyExit = await Promise.race([
       exited,
       new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), 500)),
     ])
 
     if (earlyExit !== undefined && earlyExit !== 0) {
-      throw new Error(
-        `privileged helper exited with code ${earlyExit}. `
-        + 'Administrator permission was refused, or sudo is not available.',
-      )
+      const detail = stderr.trim()
+      let guidance = ''
+      if (/\b(?:EACCES|EPERM)\b/.test(detail))
+        guidance = ' Check the path named above and its parent directories. Fix ownership or access manually; do not use chmod 777.'
+      else if (!direct && /^sudo:/m.test(detail))
+        guidance = ' Retry from a terminal where sudo can request permission, or ask an administrator to grant access.'
+      throw new Error(`privileged helper exited with code ${earlyExit}.${detail ? ` ${detail}${guidance}` : ' No diagnostic output from the helper or sudo.'}`)
     }
   }
 

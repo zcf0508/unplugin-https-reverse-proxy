@@ -12,6 +12,7 @@ import { lstatSync } from 'node:fs'
 export interface PathRejection {
   path: string
   reason: string
+  guidance: string
 }
 
 export interface PathCheckOptions {
@@ -47,28 +48,52 @@ export function checkPrivilegedPath(
     stats = lstatSync(path)
   }
   catch (error) {
-    return { path, reason: `${options.label} is not readable: ${(error as Error).message}` }
+    return {
+      path,
+      reason: `${options.label} is not readable: ${(error as Error).message}`,
+      guidance: 'Check that this path exists and that you can access its parent directories. Fix access manually; do not make the path group- or world-writable.',
+    }
   }
 
-  if (stats.isSymbolicLink())
-    return { path, reason: `${options.label} is a symbolic link (${describe(stats)})` }
+  if (stats.isSymbolicLink()) {
+    return {
+      path,
+      reason: `${options.label} is a symbolic link (${describe(stats)})`,
+      guidance: 'Replace this symlink with a regular file manually or reinstall the affected file; do not bypass the safety check.',
+    }
+  }
 
-  if (!stats.isFile() && !stats.isDirectory())
-    return { path, reason: `${options.label} is neither a file nor a directory` }
+  if (!stats.isFile() && !stats.isDirectory()) {
+    return {
+      path,
+      reason: `${options.label} is neither a file nor a directory`,
+      guidance: 'Provide a regular file or directory at this path manually.',
+    }
+  }
 
   const allowedOwner = stats.uid === 0 || (options.ownerUid !== undefined && stats.uid === options.ownerUid)
-  if (!allowedOwner)
-    return { path, reason: `${options.label} is owned by another user (${describe(stats)})` }
+  if (!allowedOwner) {
+    return {
+      path,
+      reason: `${options.label} is owned by another user (${describe(stats)})`,
+      guidance: 'Check ownership manually. This path must be owned by root or the user running the dev server.',
+    }
+  }
 
   // Root's own files are fine at 644/755; the point is that no one else can
   // write them.
-  if (stats.mode & 0o022)
-    return { path, reason: `${options.label} is group- or world-writable (${describe(stats)})` }
+  if (stats.mode & 0o022) {
+    return {
+      path,
+      reason: `${options.label} is group- or world-writable (${describe(stats)})`,
+      guidance: 'Remove group and world write access manually; do not use chmod 777.',
+    }
+  }
 
   return undefined
 }
 
 /** Formats a rejection for the helper log; one place keeps the wording stable. */
 export function describeRejection(rejection: PathRejection): string {
-  return `refusing to start: ${rejection.reason} (${rejection.path})`
+  return `refusing to start: ${rejection.reason} (${rejection.path}). ${rejection.guidance}`
 }
